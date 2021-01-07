@@ -17,6 +17,8 @@ namespace std
 {
   using boolean = bool;
   using sv = std::string_view;
+  template<typename type_t>
+  using const_ref = std::reference_wrapper<const type_t>;
 }
 
 namespace clon
@@ -75,7 +77,7 @@ namespace clon
   std::string to_string(const clon& c);
 
   class expected_character : public std::invalid_argument
-  { 
+  {
   public:
     expected_character(std::sv chars);
   };
@@ -112,6 +114,8 @@ namespace clon
   clon parse_fmt(std::sv pattern, args&&... as);
 
   const clon& get(std::sv path, const clon& c);
+  std::vector<std::const_ref<clon>>
+    get_all(std::sv path, const clon& c);
 
   const string& get_string(std::sv pth, const clon& c);
   const number& get_number(std::sv pth, const clon& c);

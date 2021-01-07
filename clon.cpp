@@ -9,7 +9,7 @@ namespace clon::utils
   {
     return min <= c and c <= max;
   }
-  
+
   bool is_digit(const char c)
   {
     return '0' <= c and c <= '9';
@@ -31,7 +31,7 @@ namespace clon::utils
     return !s.empty() and
       std::all_of(s.begin(), s.end(), is_lower);
   }
-  
+
   std::size_t to_integer(std::sv v)
   {
     std::size_t size = v.size();
@@ -333,8 +333,6 @@ namespace clon::getter::detail
       return std::sv(b, std::prev(t.b));
   }
 
-
-
   path to_path(std::sv spath)
   {
     auto toks = tokenizer(spath.begin(), spath.end(), ':');
@@ -415,11 +413,32 @@ namespace clon::getter::detail
     return undefined();
   }
 
+  const bool is_mono_path(const path& pth)
+  {
+    return not pth.many;
+  }
+
+  const bool is_many_path(const path& pth)
+  {
+    return not is_mono_path(pth);
+  }
+
+  const bool is_mono_paths(
+    paths::const_iterator b,
+    paths::const_iterator e)
+  {
+    return std::all_of(b, e, is_mono_path);
+  }
+
   const clon& get_mono(
     paths::const_iterator b,
     paths::const_iterator e,
     const clon& c)
   {
+    if (not is_mono_paths(b, e))
+      throw malformed_path(
+        "the get_mono expects only mono path");
+
     if (b != e and not is_none(c))
     {
       const clon& sub = get_mono(*b, c);
@@ -434,13 +453,70 @@ namespace clon::getter::detail
       return undefined();
   }
 
-  using clon_refs = std::vector<std::reference_wrapper<const clon>>;
+  const std::vector<std::const_ref<clon>>
+    get_many(
+      const path& pth,
+      const clon& c)
+  {
+    std::vector<std::const_ref<clon>> cls;
 
+    if (is_many_path(pth))
+    {
+      for (const clon& item : as_object(c))
+        if (item.name == pth.p)
+          cls.push_back(std::cref(item));
+    }
+    else
+      cls.push_back(get_mono(pth, c));
+
+    return cls;
+  }
+
+  
+  const std::vector<std::const_ref<clon>>
+    get_many(
+      paths::const_iterator b,
+      paths::const_iterator e,
+      const clon& c);
+  
+  const std::vector<std::const_ref<clon>>
+    get_many(
+      paths::const_iterator b,
+      paths::const_iterator e,
+      const std::vector<std::const_ref<clon>>& cls)
+  {
+    std::vector<std::const_ref<clon>> res;
+    
+    for (auto&& c : cls)
+    {
+      auto&& subs = get_many(b, e, c);
+      res.insert(res.end(), subs.begin(), subs.end());
+    }
+    
+    return res;
+  }
+
+  const std::vector<std::const_ref<clon>>
+    get_many(
+      paths::const_iterator b,
+      paths::const_iterator e,
+      const clon& c)
+  {
+    if (b != e and not is_none(c))
+    {
+      auto&& subs = get_many(*b, c);
+      std::advance(b, 1);
+      return  get_many(b, e, subs);
+    }
+    else if (b == e and is_none(c))
+      return {};
+    else if (b == e and not is_none(c))
+      return { std::cref(c) };
+    else
+      return {};
+  }
 
 }
-
-
-
 
 namespace clon
 {
@@ -580,6 +656,13 @@ namespace clon
   {
     getter::detail::paths&& pths = getter::detail::to_paths(path);
     return getter::detail::get_mono(pths.begin(), pths.end(), c);
+  }
+
+  std::vector<std::const_ref<clon>>
+    get_all(std::sv path, const clon& c)
+  {
+    getter::detail::paths&& pths = getter::detail::to_paths(path);
+    return getter::detail::get_many(pths.begin(), pths.end(), c);
   }
 
   const string& get_string(std::sv pth, const clon& c)

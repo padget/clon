@@ -31,7 +31,26 @@ void root_name_equals()
   test_equals(clon::is_number(c), false);
 }
 
+void get_many_toto()
+{
+  std::string cs =
+    R"((root 
+        (log 
+          (level "info")
+          (level "fatal")
+          (message "a test object"))
+        (log 
+          (level "info")
+          (level "fatal"))))";
+
+  const clon::clon& c = clon::parse(cs);
+  
+  for (auto&& item : clon::get_all("log:*.level:*", c))
+    std::cout << item.get().name << std::endl;
+}
+
 int main(int argc, char** argv)
 {
   run_test(root_name_equals);
+  run_test(get_many_toto);
 }
