@@ -47,6 +47,37 @@ namespace clon::utils
       return (v.back() - '0') + ten;
     }
   }
+
+  struct tokenizer
+  {
+    std::sv::const_iterator b;
+    std::sv::const_iterator e;
+    const char sep;
+  };
+
+  std::size_t count(const tokenizer& t)
+  {
+    return std::count(t.b, t.e, t.sep);
+  }
+
+  std::sv next_token(tokenizer& t)
+  {
+    auto b = t.b;
+
+    while (t.b != t.e)
+      if (*(t.b) == t.sep)
+      {
+        std::advance(t.b, 1);
+        break;
+      }
+      else
+        std::advance(t.b, 1);
+
+    if (t.b == t.e)
+      return std::sv(b, t.b);
+    else
+      return std::sv(b, std::prev(t.b));
+  }
 }
 
 namespace clon::parser::detail
@@ -302,41 +333,12 @@ namespace clon::getter::detail
 
   using paths = std::vector<path>;
 
-  struct tokenizer
-  {
-    std::sv::const_iterator b;
-    std::sv::const_iterator e;
-    const char sep;
-  };
 
-  std::size_t count(const tokenizer& t)
-  {
-    return std::count(t.b, t.e, t.sep);
-  }
-
-  std::sv next_token(tokenizer& t)
-  {
-    auto b = t.b;
-
-    while (t.b != t.e)
-      if (*(t.b) == t.sep)
-      {
-        std::advance(t.b, 1);
-        break;
-      }
-      else
-        std::advance(t.b, 1);
-
-    if (t.b == t.e)
-      return std::sv(b, t.b);
-    else
-      return std::sv(b, std::prev(t.b));
-  }
 
   path to_path(std::sv spath)
   {
-    auto toks = tokenizer(spath.begin(), spath.end(), ':');
-    auto cnt = count(toks);
+    utils::tokenizer toks(spath.begin(), spath.end(), ':');
+    auto cnt = utils::count(toks);
 
     if (cnt > 2)
       throw malformed_path(
@@ -351,7 +353,7 @@ namespace clon::getter::detail
     }
     else
     {
-      auto&& pth = next_token(toks);
+      auto&& pth = utils::next_token(toks);
 
       if (pth.size() == 0)
         throw malformed_path("empty path");
@@ -359,7 +361,7 @@ namespace clon::getter::detail
       if (not utils::is_name(pth))
         throw malformed_name(pth);
 
-      auto&& nb = next_token(toks);
+      auto&& nb = utils::next_token(toks);
       std::size_t idx = 0;
       std::boolean many = false;
 
@@ -383,10 +385,10 @@ namespace clon::getter::detail
   paths to_paths(std::sv spath)
   {
     paths pths;
-    tokenizer toks(spath.begin(), spath.end(), '.');
+    utils::tokenizer toks(spath.begin(), spath.end(), '.');
     std::sv tok;
 
-    while ((tok = next_token(toks)).size() > 0)
+    while ((tok = utils::next_token(toks)).size() > 0)
       pths.push_back(to_path(tok));
 
     return pths;
@@ -445,12 +447,8 @@ namespace clon::getter::detail
       std::advance(b, 1);
       return get_mono(b, e, sub);
     }
-    else if (b == e and is_none(c))
-      return undefined();
-    else if (b == e and not is_none(c))
-      return c;
     else
-      return undefined();
+      return c;
   }
 
   const std::vector<std::const_ref<clon>>
@@ -472,13 +470,13 @@ namespace clon::getter::detail
     return cls;
   }
 
-  
+
   const std::vector<std::const_ref<clon>>
     get_many(
       paths::const_iterator b,
       paths::const_iterator e,
       const clon& c);
-  
+
   const std::vector<std::const_ref<clon>>
     get_many(
       paths::const_iterator b,
@@ -486,13 +484,13 @@ namespace clon::getter::detail
       const std::vector<std::const_ref<clon>>& cls)
   {
     std::vector<std::const_ref<clon>> res;
-    
+
     for (auto&& c : cls)
     {
       auto&& subs = get_many(b, e, c);
       res.insert(res.end(), subs.begin(), subs.end());
     }
-    
+
     return res;
   }
 
@@ -508,14 +506,162 @@ namespace clon::getter::detail
       std::advance(b, 1);
       return  get_many(b, e, subs);
     }
-    else if (b == e and is_none(c))
-      return {};
     else if (b == e and not is_none(c))
       return { std::cref(c) };
     else
       return {};
   }
 
+}
+
+namespace clon::checker::detail
+{
+  struct interval
+  {
+    std::size_t min;
+    std::size_t max;
+  };
+
+  struct constraint
+  {
+    clon_type type;
+    interval mnmx;
+  };
+
+  struct constrained_path
+  {
+    std::string_view path;
+    std::size_t min;
+    std::size_t max;
+  };
+
+  auto is_specific_char(const char spec)
+  {
+    return [=](const char& c)
+    {
+      return c == spec;
+    };
+  }
+
+  bool contains(
+    std::string_view s,
+    const char c)
+  {
+    auto b = s.begin();
+    auto e = s.end();
+    return std::any_of(
+      b, e, is_specific_char(c));
+  }
+
+
+  bool must_be_string(
+    std::string_view constraint)
+  {
+    return contains(constraint, 's');
+  }
+
+  bool must_be_object(
+    std::string_view constraint)
+  {
+    return contains(constraint, 'o');
+  }
+
+  bool must_be_number(
+    std::string_view constraint)
+  {
+    return contains(constraint, 'n');
+  }
+
+  bool must_be_boolean(
+    std::string_view constraint)
+  {
+    return contains(constraint, 'b');
+  }
+
+  class malformed_constraint
+    : public std::invalid_argument
+  {
+  public:
+    malformed_constraint(
+      std::string_view reason)
+      : std::invalid_argument(
+        fmt::format(
+          "malformed constraint : {}", reason))
+    {}
+  };
+
+  clon_type to_constraint_type(
+    std::string_view type)
+  {
+    if (type.size() != 1)
+      throw malformed_constraint(
+        "the type must be made of one letter");
+
+    const char& c = *(type.begin());
+
+    switch (c)
+    {
+    case 'o': return clon_type::object;
+    case 's': return clon_type::string;
+    case 'n': return clon_type::number;
+    case 'b': return clon_type::boolean;
+    default: throw malformed_constraint(
+      "the type must be made of one letter :"
+      " 's', 'o', 'b', 'n'");
+    }
+  }
+
+  std::size_t to_bound(
+    std::string_view b)
+  {
+    if (utils::is_integer(b))
+      return utils::to_integer(b);
+    else if (b == "*")
+      return std::numeric_limits<std::size_t>::max();
+    else
+      throw malformed_constraint(
+        "the interval boundary must be a integer or '*'");
+  }
+
+  interval to_constraint_interval(
+    std::string_view mnmx)
+  {
+    auto b = mnmx.begin();
+    auto e = mnmx.end();
+    auto toks = utils::tokenizer(b, e, '-');
+    auto cnt = utils::count(toks);
+
+    if (cnt != 1)
+      throw malformed_constraint(
+        "the interval must contains one '-'");
+
+    auto&& min = to_bound(utils::next_token(toks));
+    auto&& max = to_bound(utils::next_token(toks));
+        
+    if (min > max)
+      throw malformed_constraint(
+        "the interval min must be inferior to max");
+
+    return { min, max };
+  }
+
+  constraint to_constraint(
+    std::string_view cstr)
+  {
+    auto b = cstr.begin();
+    auto e = cstr.end();
+    auto toks = utils::tokenizer(b, e, ':');
+    auto cnt = utils::count(toks);
+    
+    if (cnt != 1)
+      throw malformed_constraint(
+        "constraint must contain one ':'");
+
+    auto&& type = to_constraint_type(utils::next_token(toks));
+    auto&& mnmx = to_constraint_interval(utils::next_token(toks));
+    
+    return { type, mnmx };
+  }
 }
 
 namespace clon
@@ -690,8 +836,23 @@ namespace clon
     return is_none(get(pth, c));;
   }
 
-  const bool check(std::sv pth, std::sv cstr, const clon& root)
+  const bool check(
+    std::string_view pth,
+    std::string_view cstr,
+    const clon& root)
   {
+    const auto& all = get_all(pth, root);
+    const checker::detail::constraint& cs = checker::detail::to_constraint(cstr);
+    
+    std::size_t cnt = all.size();
+    
+    if (not utils::between(cs.mnmx.min, all.size(), cs.mnmx.max))
+      return false;
+
+    for (auto&& item : all)
+      if (type(item.get()) != cs.type)
+        return false;
+
     return true;
   }
 }

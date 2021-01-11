@@ -13,6 +13,8 @@
 #include <istream>
 #include <limits>
 
+#include <iostream>
+
 namespace std
 {
   using boolean = bool;
