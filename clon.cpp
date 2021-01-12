@@ -91,15 +91,17 @@ namespace clon::parser::detail
   {
     if (b != e)
     {
-      if (*b == '"')
+      char c = *b;
+
+      if (c == '"')
         return clon_type::string;
-      else if (*b == '(')
+      else if (c == '(')
         return clon_type::object;
-      else if (*b == 't')
+      else if (c == 't')
         return clon_type::boolean;
-      else if (*b == 'f')
+      else if (c == 'f')
         return clon_type::boolean;
-      else if ('0' <= *b and *b <= '9')
+      else if (utils::between('0', c, '9'))
         return clon_type::number;
     }
 
@@ -150,10 +152,11 @@ namespace clon::parser::detail
     char_iterator b,
     char_iterator e)
   {
-    while (b != e and (*b == ' ' or
-      *b == '\t' or
-      *b == '\n' or
-      *b == '\r'))
+    while (b != e and
+      (*b == ' ' or
+        *b == '\t' or
+        *b == '\n' or
+        *b == '\r'))
       std::advance(b, 1);
     return b;
   }
@@ -171,7 +174,7 @@ namespace clon::parser::detail
       if (b != e and *b == '"')
         return {
           std::string(std::next(sb), b),
-          std::next(b) };
+          std::next(b)};
       else
         throw expected_character("'\"'");
     }
@@ -419,7 +422,7 @@ namespace clon::getter::detail
     {
       const path& pth = *b;
       std::size_t cnt(0);
-      
+
       for (auto&& item : as_object(c))
         if (item.name == pth.p)
         {

@@ -14,6 +14,8 @@
 
 #include <iostream>
 
+#define CLON_VERSION 1.0.0 
+
 namespace std
 {
   using boolean = bool;

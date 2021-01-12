@@ -1,10 +1,41 @@
 COMPILER=g++-10
 LIBS=-lfmt
 FLAGS=-std=c++20 -Wall -O3
+VERSION=`more clon.hpp | grep CLON_VERSION | grep -Po '[0-9]+\.[0-9]+\.[0-9]+'`
 TITLESEP="------------------------------------------"
-.PHONY: all build test clean start
 
-all: start clean build test
+.PHONY: all build test clean start version
+
+all: start clean build test version dist/clon-${VERSION}.zip
+
+version: clon.hpp
+	@echo version of application : ${VERSION}
+
+dist/clon-${VERSION}.zip: zip-check clon.hpp clon.cpp dist/clon.o version
+	@zip dist/clon-${VERSION}.zip clon.hpp clon.cpp dist/clon.o 
+	@echo archive created clon-${VERSION}.zip
+
+zip-check-title:
+	@echo ${TITLESEP}
+	@echo "-- check zip existence"
+	@echo ${TITLESEP}
+
+zip-check: zip-check-title
+	@if [ -z `which zip` ]; then\
+		sudo apt install zip;\
+	fi
+	@echo ' -> Use of' `which zip`
+
+compiler-check-title:
+	@echo ${TITLESEP}
+	@echo "-- check ${COMPILER} existence"
+	@echo ${TITLESEP}
+
+compiler-check: compiler-check-title
+	@if [ -z `which ${COMPILER}` ]; then\
+		sudo apt install ${COMPILER};\
+	fi
+	@echo ' -> Use of' `which ${COMPILER}`
 
 start: 
 	@echo ${TITLESEP}
@@ -16,14 +47,14 @@ build_title:
 	@echo "-- build clon library"
 	@echo ${TITLESEP}
 	
-build: build_title dist/clon.o
+build: compiler-check build_title dist/clon.o
 	
 test_title:
 	@echo ${TITLESEP}
 	@echo "-- unit tests"
 	@echo ${TITLESEP}
 	
-test: test_title tests/test.clon.out
+test: compiler-check test_title tests/test.clon.out
 	@echo " -> running clon tests..."
 	@./tests/test.clon.out
 
@@ -51,11 +82,11 @@ clean_title:
 	@echo ${TITLESEP}
 	@echo "-- clean project"
 	@echo ${TITLESEP}
-	
 
 clean: clean_title
 	@echo " -> remove dist directory..."
 	@rm -rf dist
 	@echo " -> remove tests directory..."
 	@rm -rf tests
-
+	@echo " -> remove archives *.zip"
+	@rm -f *.zip

@@ -1,34 +1,38 @@
 #include <iostream>
 #include "clon.hpp"
+#include "test.hpp"
 
+constexpr std::string_view cl1 = R"(
+  (log 
+    (level "info")
+    (message "a test object")))";
 
-#define test_equals(actual, expected)              \
-  fmt::print("===== at l.{} test {} == {} : {}\n", \
-    __LINE__, #actual, #expected,                  \
-    ((actual) == (expected)) ? "OK" : "KO");       \
+constexpr std::string_view cl2 = R"(
+  (root 
+    (log 
+      (level "info")
+      (level "fatal")
+      (message "a test object"))
+    (log 
+      (level "info")
+      (level "fatal"))))";
 
-#define test_not_equals(actual, expected)          \
-  fmt::print("===== at l.{} test {} != {} : {}\n", \
-    __LINE__, #actual, #expected,                  \
-    ((actual) != (expected)) ? "OK" : "KO");       \
-
-#define run_test(testname)                   \
-  fmt::print("--------------------------\n");\
-  fmt::print("=  test file {}\n", __FILE__); \
-  fmt::print("=== run {}\n", #testname);     \
-  testname();                                \
-
-
-void root_name_equals()
+void cl1_should_be_parseable()
 {
-  std::string cs =
-    R"((log 
-        (level "info")
-        (message "a test object")))";
+  
+}
 
-  const clon::clon& c = clon::parse(cs);
+void root_name_should_be_equal_to_log()
+{
+  const clon::clon& c = clon::parse(cl1);
 
   test_equals(c.name, "log");
+}
+
+void root_clon_should_be_an_object()
+{
+  const clon::clon& c = clon::parse(cl1);
+  
   test_equals(clon::is_object(c), true);
   test_equals(clon::is_string(c), false);
   test_equals(clon::is_none(c), false);
@@ -36,19 +40,11 @@ void root_name_equals()
   test_equals(clon::is_number(c), false);
 }
 
+
+
 void get_many_toto()
 {
-  std::string cs =
-    R"((root 
-        (log 
-          (level "info")
-          (level "fatal")
-          (message "a test object"))
-        (log 
-          (level "info")
-          (level "fatal"))))";
-
-  const clon::clon& c = clon::parse(cs);
+  const clon::clon& c = clon::parse(cl2);
 
   for (auto&& item : clon::get_all("log:*.level:*", c))
     std::cout << item.get().name << std::endl;
@@ -56,17 +52,7 @@ void get_many_toto()
 
 void get_toto()
 {
-  std::string cs =
-    R"((root 
-        (log 
-          (level "info")
-          (level "fatal")
-          (message "a test object"))
-        (log 
-          (level "warn")
-          (level "fatal"))))";
-
-  const clon::clon& c = clon::parse(cs);
+  const clon::clon& c = clon::parse(cl2);
   for (auto&& item : clon::get_all("log:1", c))
     std::cout << item.get().name << std::endl;
 }
@@ -92,8 +78,9 @@ void check_test()
 
 int main(int argc, char** argv)
 {
-    //run_test(root_name_equals);
-    run_test(get_toto);
-    //run_test(get_many_toto);
-    //run_test(check_test);
+  run_test(root_name_should_be_equal_to_log);
+  run_test(root_clon_should_be_an_object);
+  run_test(cl1_should_be_parseable);
+  run_test(get_many_toto);
+  run_test(check_test);
 }
