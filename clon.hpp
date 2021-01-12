@@ -6,7 +6,6 @@
 #include <variant>
 #include <string>
 #include <string_view>
-#include <sstream>
 #include <exception>
 #include <stdexcept>
 #include <fmt/format.h>
@@ -45,6 +44,9 @@ namespace clon
   using string_cref = const string&;
   using number_cref = const number&;
   using boolean_cref = const boolean&;
+  
+  using clon_refs = std::vector<std::const_ref<clon>>;
+  using clon_crefs = const clon_refs;
 
   using clon_value = std::variant<
     std::monostate, boolean,
@@ -108,7 +110,6 @@ namespace clon
     unreachable_path(std::sv pth);
   };
 
-
   clon parse(std::sv s);
   clon parse_stream(std::istream& s);
 
@@ -116,8 +117,7 @@ namespace clon
   clon parse_fmt(std::sv pattern, args&&... as);
 
   const clon& get(std::sv path, const clon& c);
-  std::vector<std::const_ref<clon>>
-    get_all(std::sv path, const clon& c);
+  clon_crefs get_all(std::sv path, const clon& c);
 
   const string& get_string(std::sv pth, const clon& c);
   const number& get_number(std::sv pth, const clon& c);

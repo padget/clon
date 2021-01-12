@@ -1,4 +1,5 @@
 #include "clon.hpp"
+#include <ranges>
 
 namespace clon::utils
 {
@@ -26,10 +27,11 @@ namespace clon::utils
     return between('a', c, 'z');
   }
 
-  bool is_name(std::sv s)
+  bool is_name(auto&& s)
   {
-    return !s.empty() and
-      std::all_of(s.begin(), s.end(), is_lower);
+    return
+      not std::ranges::empty(s) and
+      std::ranges::all_of(s, is_lower);
   }
 
   std::size_t to_integer(std::sv v)
@@ -314,11 +316,11 @@ namespace clon::parser::detail
     b = res.i;
     b = detail::parse_blank(b, e);
 
-    if (res.i == e)
+    if (b == e)
       return res.val;
 
     // TODO error a définir
-    throw std::exception();
+    throw expected_character("EOF|'\\0'");;
   }
 } // namespace detail
 
@@ -327,33 +329,44 @@ namespace clon::getter::detail
   struct path
   {
     std::sv p;
-    std::size_t idx = 0;
-    std::boolean many = false;
+    std::size_t min = 0;
+    std::size_t max = 0;
   };
 
   using paths = std::vector<path>;
 
-
-
-  path to_path(std::sv spath)
+  template <typename view_t>
+  std::sv to_sv(view_t&& v)
   {
-    utils::tokenizer toks(spath.begin(), spath.end(), ':');
-    auto cnt = utils::count(toks);
+    return std::sv(
+      &*std::ranges::begin(v),
+      std::ranges::distance(v));
+  }
+
+  path to_path(auto&& spath)
+  {
+    auto spl = spath | std::views::split(':');
+    auto cnt = std::ranges::distance(spl);
 
     if (cnt > 2)
       throw malformed_path(
-        fmt::format("more than once ':' in path '{}'", spath));
+        fmt::format("more than once ':' in path '{}'", to_sv(spath)));
 
     if (cnt == 0)
     {
       if (not utils::is_name(spath))
-        throw malformed_name(spath);
+        throw malformed_name(to_sv(spath));
 
-      return { spath, 0 };
+      return { to_sv(spath), 0 };
     }
     else
     {
-      auto&& pth = utils::next_token(toks);
+      std::array<std::sv, 2> pthnb;
+      std::ranges::copy(
+        spl | std::views::transform([](auto&& v) {return to_sv(v);}),
+        std::begin(pthnb));
+
+      auto&& pth = pthnb[0];
 
       if (pth.size() == 0)
         throw malformed_path("empty path");
@@ -361,157 +374,120 @@ namespace clon::getter::detail
       if (not utils::is_name(pth))
         throw malformed_name(pth);
 
-      auto&& nb = utils::next_token(toks);
-      std::size_t idx = 0;
-      std::boolean many = false;
+      auto&& nb = pthnb[1];
+      std::size_t min = 0;
+      std::size_t max = 0;
 
       if (nb.size() != 0)
       {
         if (utils::is_integer(nb))
-          idx = utils::to_integer(nb);
+        {
+          min = utils::to_integer(nb);
+          max = min;
+        }
         else if (nb == "*")
         {
-          idx = std::numeric_limits<std::size_t>::max();
-          many = true;
+          min = 0;
+          max = std::numeric_limits<std::size_t>::max();
         }
         else
           throw malformed_number(nb);
       }
 
-      return { pth, idx , many };
+      return { pth, min , max };
     }
   }
 
-  paths to_paths(std::sv spath)
+  auto has_same_name(
+    const path& pth)
   {
-    paths pths;
-    utils::tokenizer toks(spath.begin(), spath.end(), '.');
-    std::sv tok;
-
-    while ((tok = utils::next_token(toks)).size() > 0)
-      pths.push_back(to_path(tok));
-
-    return pths;
+    return [&pth](auto&& c) {
+      return c.name == pth.p;
+    };
   }
 
-  const clon& get_mono(
-    const path& pth,
-    const clon& c)
+  template<typename clbt>
+  void explore(
+    auto b,
+    auto e,
+    const clon& c,
+    const clbt& clb)
   {
-    if (is_object(c))
+    if (b == e)
+      clb(c);
+    else if (is_object(c))
     {
-      std::size_t cnt = 0;
-
-      for (const clon& sub : as_object(c))
-        if (sub.name == pth.p)
+      const path& pth = *b;
+      std::size_t cnt(0);
+      
+      for (auto&& item : as_object(c))
+        if (item.name == pth.p)
         {
-          if (cnt == pth.idx)
-            return sub;
-          else
-            cnt++;
+          if (utils::between(pth.min, cnt, pth.max))
+            explore(std::next(b), e, item, clb);
+          else if (cnt > pth.max)
+            break;
+
+          cnt++;
         }
     }
-
-    return undefined();
   }
 
-  const bool is_mono_path(const path& pth)
+  template<typename clbt>
+  void explore(
+    std::sv pth,
+    const clon& c,
+    const clbt& clb)
   {
-    return not pth.many;
+    constexpr auto to_pth = [](auto&& v) {
+      return to_path(v);
+    };
+
+    auto&& pths = pth
+      | std::views::split('.')
+      | std::views::transform(to_pth);
+
+    auto b = std::ranges::begin(pths);
+    auto e = std::ranges::end(pths);
+
+    explore(b, e, c, clb);
   }
 
-  const bool is_many_path(const path& pth)
+  auto assign_to(const clon*& ref)
   {
-    return not is_mono_path(pth);
+    return [&ref](const clon& c) {
+      ref = &c;
+    };
   }
 
-  const bool is_mono_paths(
-    paths::const_iterator b,
-    paths::const_iterator e)
-  {
-    return std::all_of(b, e, is_mono_path);
-  }
-
-  const clon& get_mono(
-    paths::const_iterator b,
-    paths::const_iterator e,
+  const clon& get(
+    std::sv pth,
     const clon& c)
   {
-    if (not is_mono_paths(b, e))
-      throw malformed_path(
-        "the get_mono expects only mono path");
+    const clon* res = nullptr;
+    explore(pth, c, assign_to(res));
 
-    if (b != e and not is_none(c))
-    {
-      const clon& sub = get_mono(*b, c);
-      std::advance(b, 1);
-      return get_mono(b, e, sub);
-    }
+    if (res == nullptr)
+      return undefined();
     else
-      return c;
+      return *res;
   }
 
-  const std::vector<std::const_ref<clon>>
-    get_many(
-      const path& pth,
-      const clon& c)
+  auto push_back(clon_refs& refs)
   {
-    std::vector<std::const_ref<clon>> cls;
-
-    if (is_many_path(pth))
-    {
-      for (const clon& item : as_object(c))
-        if (item.name == pth.p)
-          cls.push_back(std::cref(item));
-    }
-    else
-      cls.push_back(get_mono(pth, c));
-
-    return cls;
+    return [&](const clon& c) {
+      refs.push_back(c);
+    };
   }
 
-
-  const std::vector<std::const_ref<clon>>
-    get_many(
-      paths::const_iterator b,
-      paths::const_iterator e,
-      const clon& c);
-
-  const std::vector<std::const_ref<clon>>
-    get_many(
-      paths::const_iterator b,
-      paths::const_iterator e,
-      const std::vector<std::const_ref<clon>>& cls)
+  clon_crefs get_all(
+    std::sv pth,
+    const clon& c)
   {
-    std::vector<std::const_ref<clon>> res;
-
-    for (auto&& c : cls)
-    {
-      auto&& subs = get_many(b, e, c);
-      res.insert(res.end(), subs.begin(), subs.end());
-    }
-
-    return res;
+    clon_refs refs;
+    explore(pth, c, push_back(refs));
+    return refs;
   }
-
-  const std::vector<std::const_ref<clon>>
-    get_many(
-      paths::const_iterator b,
-      paths::const_iterator e,
-      const clon& c)
-  {
-    if (b != e and not is_none(c))
-    {
-      auto&& subs = get_many(*b, c);
-      std::advance(b, 1);
-      return  get_many(b, e, subs);
-    }
-    else if (b == e and not is_none(c))
-      return { std::cref(c) };
-    else
-      return {};
-  }
-
 }
 
 namespace clon::checker::detail
@@ -530,7 +506,7 @@ namespace clon::checker::detail
 
   struct constrained_path
   {
-    std::string_view path;
+    std::sv path;
     std::size_t min;
     std::size_t max;
   };
@@ -544,7 +520,7 @@ namespace clon::checker::detail
   }
 
   bool contains(
-    std::string_view s,
+    std::sv s,
     const char c)
   {
     auto b = s.begin();
@@ -555,25 +531,25 @@ namespace clon::checker::detail
 
 
   bool must_be_string(
-    std::string_view constraint)
+    std::sv constraint)
   {
     return contains(constraint, 's');
   }
 
   bool must_be_object(
-    std::string_view constraint)
+    std::sv constraint)
   {
     return contains(constraint, 'o');
   }
 
   bool must_be_number(
-    std::string_view constraint)
+    std::sv constraint)
   {
     return contains(constraint, 'n');
   }
 
   bool must_be_boolean(
-    std::string_view constraint)
+    std::sv constraint)
   {
     return contains(constraint, 'b');
   }
@@ -583,7 +559,7 @@ namespace clon::checker::detail
   {
   public:
     malformed_constraint(
-      std::string_view reason)
+      std::sv reason)
       : std::invalid_argument(
         fmt::format(
           "malformed constraint : {}", reason))
@@ -591,7 +567,7 @@ namespace clon::checker::detail
   };
 
   clon_type to_constraint_type(
-    std::string_view type)
+    std::sv type)
   {
     if (type.size() != 1)
       throw malformed_constraint(
@@ -612,7 +588,7 @@ namespace clon::checker::detail
   }
 
   std::size_t to_bound(
-    std::string_view b)
+    std::sv b)
   {
     if (utils::is_integer(b))
       return utils::to_integer(b);
@@ -624,7 +600,7 @@ namespace clon::checker::detail
   }
 
   interval to_constraint_interval(
-    std::string_view mnmx)
+    std::sv mnmx)
   {
     auto b = mnmx.begin();
     auto e = mnmx.end();
@@ -637,7 +613,7 @@ namespace clon::checker::detail
 
     auto&& min = to_bound(utils::next_token(toks));
     auto&& max = to_bound(utils::next_token(toks));
-        
+
     if (min > max)
       throw malformed_constraint(
         "the interval min must be inferior to max");
@@ -646,20 +622,20 @@ namespace clon::checker::detail
   }
 
   constraint to_constraint(
-    std::string_view cstr)
+    std::sv cstr)
   {
     auto b = cstr.begin();
     auto e = cstr.end();
     auto toks = utils::tokenizer(b, e, ':');
     auto cnt = utils::count(toks);
-    
+
     if (cnt != 1)
       throw malformed_constraint(
         "constraint must contain one ':'");
 
     auto&& type = to_constraint_type(utils::next_token(toks));
     auto&& mnmx = to_constraint_interval(utils::next_token(toks));
-    
+
     return { type, mnmx };
   }
 }
@@ -800,15 +776,12 @@ namespace clon
 
   const clon& get(std::sv path, const clon& c)
   {
-    getter::detail::paths&& pths = getter::detail::to_paths(path);
-    return getter::detail::get_mono(pths.begin(), pths.end(), c);
+    return getter::detail::get(path, c);
   }
 
-  std::vector<std::const_ref<clon>>
-    get_all(std::sv path, const clon& c)
+  clon_crefs get_all(std::sv path, const clon& c)
   {
-    getter::detail::paths&& pths = getter::detail::to_paths(path);
-    return getter::detail::get_many(pths.begin(), pths.end(), c);
+    return getter::detail::get_all(path, c);
   }
 
   const string& get_string(std::sv pth, const clon& c)
@@ -837,15 +810,15 @@ namespace clon
   }
 
   const bool check(
-    std::string_view pth,
-    std::string_view cstr,
+    std::sv pth,
+    std::sv cstr,
     const clon& root)
   {
     const auto& all = get_all(pth, root);
     const checker::detail::constraint& cs = checker::detail::to_constraint(cstr);
-    
+
     std::size_t cnt = all.size();
-    
+
     if (not utils::between(cs.mnmx.min, all.size(), cs.mnmx.max))
       return false;
 
