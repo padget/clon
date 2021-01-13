@@ -40,6 +40,11 @@ void root_clon_should_be_an_object()
   test_equals(clon::is_number(c), false);
 }
 
+void to_string_must_fonctionne()
+{
+  const clon::clon& c = clon::parse(cl1);
+  std::cout << clon::to_string(c) << std::endl;
+}
 
 
 void get_many_toto()
@@ -81,6 +86,7 @@ int main(int argc, char** argv)
   run_test(root_name_should_be_equal_to_log);
   run_test(root_clon_should_be_an_object);
   run_test(cl1_should_be_parseable);
+  run_test(to_string_must_fonctionne);
   run_test(get_many_toto);
   run_test(check_test);
 }

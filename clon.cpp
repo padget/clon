@@ -1,5 +1,4 @@
 #include "clon.hpp"
-#include <ranges>
 
 namespace clon::utils
 {
@@ -174,7 +173,7 @@ namespace clon::parser::detail
       if (b != e and *b == '"')
         return {
           std::string(std::next(sb), b),
-          std::next(b)};
+          std::next(b) };
       else
         throw expected_character("'\"'");
     }
@@ -456,7 +455,7 @@ namespace clon::getter::detail
     explore(b, e, c, clb);
   }
 
-  auto assign_to(const clon*& ref)
+  auto abufign_to(const clon*& ref)
   {
     return [&ref](const clon& c) {
       ref = &c;
@@ -468,7 +467,7 @@ namespace clon::getter::detail
     const clon& c)
   {
     const clon* res = nullptr;
-    explore(pth, c, assign_to(res));
+    explore(pth, c, abufign_to(res));
 
     if (res == nullptr)
       return undefined();
@@ -641,6 +640,80 @@ namespace clon::checker::detail
 
     return { type, mnmx };
   }
+}
+
+namespace clon::stringify::detail
+{
+  inline void to_string_basic(
+    fmt::memory_buffer& buf,
+    const clon& c);
+
+  inline void to_string_bool(
+    fmt::memory_buffer& buf,
+    const clon& c)
+  {
+    fmt::format_to(buf, "{}", (as_bool(c) ? "true" : "false"));
+  }
+
+  inline void to_string_string(
+    fmt::memory_buffer& buf,
+    const clon& c)
+  {
+    fmt::format_to(buf, "\"{}\"", as_string(c));
+  }
+
+  inline void to_string_number(
+    fmt::memory_buffer& buf,
+    const clon& c)
+  {
+    fmt::format_to(buf, "{}", as_number(c));
+  }
+
+  inline void to_string_object(
+    fmt::memory_buffer& buf,
+    const clon& c)
+  {
+    for (auto&& item : as_object(c))
+      to_string_basic(buf, item);
+  }
+
+  inline void to_string_basic(
+    fmt::memory_buffer& buf,
+    const clon& c)
+  {
+    fmt::format_to(buf, "({} ", c.name);
+
+    switch (type(c))
+    {
+    case clon_type::boolean:
+      to_string_bool(buf, c);
+      break;
+    case clon_type::number:
+      to_string_number(buf, c);
+      break;
+    case clon_type::string:
+      to_string_string(buf, c);
+      break;
+    case clon_type::object:
+      to_string_object(buf, c);
+      break;
+    case clon_type::none:
+      break;
+    }
+
+    fmt::format_to(buf, ")");
+  }
+
+  std::string to_string(const clon& c)
+  {
+    fmt::memory_buffer buf;
+    to_string_basic(buf, c);
+    return fmt::to_string(buf);
+  }
+}
+
+namespace clon
+{
 }
 
 namespace clon
@@ -830,6 +903,17 @@ namespace clon
         return false;
 
     return true;
+  }
+
+  std::string to_string(const clon& c)
+  {
+    return stringify::detail::to_string(c);
+  }
+
+  template<typename type_t>
+  const clon to_clon(const type_t& clon)
+  {
+
   }
 }
 

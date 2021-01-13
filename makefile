@@ -1,17 +1,18 @@
+#TODO Reorganiser les targets dans un ordre logique
 COMPILER=g++-10
 LIBS=-lfmt
 FLAGS=-std=c++20 -Wall -O3
 VERSION=`more clon.hpp | grep CLON_VERSION | grep -Po '[0-9]+\.[0-9]+\.[0-9]+'`
 TITLESEP="------------------------------------------"
 
-.PHONY: all build test clean start version
+.PHONY: all build test clean start version archive
 
-all: start clean build test version dist/clon-${VERSION}.zip
+all: start clean build test version archive
 
 version: clon.hpp
 	@echo version of application : ${VERSION}
 
-dist/clon-${VERSION}.zip: zip-check clon.hpp clon.cpp dist/clon.o version
+archive: zip-check clon.hpp clon.cpp dist/clon.o version
 	@zip dist/clon-${VERSION}.zip clon.hpp clon.cpp dist/clon.o 
 	@echo archive created clon-${VERSION}.zip
 

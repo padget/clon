@@ -1,18 +1,17 @@
 #ifndef __clon_hpp__
 #define __clon_hpp__
 
-
-#include <vector>
-#include <variant>
-#include <string>
-#include <string_view>
 #include <exception>
-#include <stdexcept>
-#include <fmt/format.h>
+#include <iostream>
 #include <istream>
 #include <limits>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <vector>
+#include <variant>
 
-#include <iostream>
+#include <fmt/format.h>
 
 #define CLON_VERSION 1.0.0 
 
@@ -128,6 +127,11 @@ namespace clon
 
   const bool exists(std::sv pth, const clon& c);
   const bool check(std::sv pth, std::sv cstr, const clon& root);
+  
+  std::string to_string(const clon& c);
+  
+  template<typename type_t>
+  const clon to_clon(const type_t& t);
 }
 
-#endif // __lon_hpp__
+#endif // __clon_hpp__
