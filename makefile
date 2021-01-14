@@ -67,6 +67,10 @@ tests:
 	@echo " -> creation of tests directory..."
 	@mkdir tests
 
+benchmarks:
+	@echo " -> creation of benchmarks directory..."
+	@mkdir benchmarks
+
 dist/clon.o: dist clon.cpp clon.hpp
 	@echo " -> building dist/clon.o..."
 	@${COMPILER} -o dist/clon.o  -c clon.cpp ${LIBS} ${FLAGS}

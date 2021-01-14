@@ -110,7 +110,7 @@ namespace clon::parser::detail
 
 
   template<typename char_iterator>
-  std::string object_name(
+  std::sv object_name(
     char_iterator b,
     char_iterator e)
   {
@@ -119,7 +119,7 @@ namespace clon::parser::detail
     while (utils::between('a', *b, 'z'))
       std::advance(b, 1);
 
-    return std::string(sb, b);
+    return std::sv(sb, b);
   }
 
   template<typename type_t, typename iterator>
@@ -172,7 +172,7 @@ namespace clon::parser::detail
 
       if (b != e and *b == '"')
         return {
-          std::string(std::next(sb), b),
+          string(std::next(sb), b),
           std::next(b) };
       else
         throw expected_character("'\"'");
@@ -192,6 +192,14 @@ namespace clon::parser::detail
 
       while (b != e and utils::between('0', *b, '9'))
         std::advance(b, 1);
+
+      if (b != e and *b == '.')
+      {
+        std::advance(b, 1);
+
+        while (b != e and utils::between('0', *b, '9'))
+          std::advance(b, 1);
+      }
 
       return { std::stod(std::string(sb, b)), b };
     }
@@ -308,10 +316,9 @@ namespace clon::parser::detail
     throw expected_character(")");
   }
 
-  template<typename char_iterator>
   clon parse(
-    char_iterator b,
-    char_iterator e)
+    std::buffer::const_iterator b,
+    std::buffer::const_iterator e)
   {
     b = detail::parse_blank(b, e);
     auto&& res = detail::parse_one(b, e);
@@ -322,7 +329,16 @@ namespace clon::parser::detail
       return res.val;
 
     // TODO error a définir
-    throw expected_character("EOF|'\\0'");;
+    throw expected_character(std::sv(b, e));
+    //throw expected_character("EOF|'\\0'");
+  }
+
+  root_clon parse(std::sv s)
+  {
+    root_clon root;
+    root.buff = { s.begin(), s.end() };
+    root.root = parse(root.buff.begin(), root.buff.end());
+    return root;
   }
 } // namespace detail
 
@@ -417,12 +433,12 @@ namespace clon::getter::detail
   {
     if (b == e)
       clb(c);
-    else if (is_object(c))
+    else if (is_<object>(c))
     {
       const path& pth = *b;
       std::size_t cnt(0);
 
-      for (auto&& item : as_object(c))
+      for (auto&& item : as_<object>(c))
         if (item.name == pth.p)
         {
           if (utils::between(pth.min, cnt, pth.max))
@@ -652,28 +668,28 @@ namespace clon::stringify::detail
     fmt::memory_buffer& buf,
     const clon& c)
   {
-    fmt::format_to(buf, "{}", (as_bool(c) ? "true" : "false"));
+    fmt::format_to(buf, "{}", (as_<boolean>(c) ? "true" : "false"));
   }
 
   inline void to_string_string(
     fmt::memory_buffer& buf,
     const clon& c)
   {
-    fmt::format_to(buf, "\"{}\"", as_string(c));
+    fmt::format_to(buf, "\"{}\"", as_<string>(c));
   }
 
   inline void to_string_number(
     fmt::memory_buffer& buf,
     const clon& c)
   {
-    fmt::format_to(buf, "{}", as_number(c));
+    fmt::format_to(buf, "{}", as_<number>(c));
   }
 
   inline void to_string_object(
     fmt::memory_buffer& buf,
     const clon& c)
   {
-    for (auto&& item : as_object(c))
+    for (auto&& item : as_<object>(c))
       to_string_basic(buf, item);
   }
 
@@ -743,76 +759,7 @@ namespace clon
     }
   }
 
-  bool is_none(const clon& c)
-  {
-    return type(c) == clon_type::none;
-  }
-
-  bool is_bool(const clon& c)
-  {
-    return type(c) == clon_type::boolean;
-  }
-
-  bool is_number(const clon& c)
-  {
-    return type(c) == clon_type::number;
-  }
-
-  bool is_string(const clon& c)
-  {
-    return type(c) == clon_type::string;
-  }
-
-  bool is_object(const clon& c)
-  {
-    return type(c) == clon_type::object;
-  }
-
-  bool is_none(std::sv pth, const clon& c)
-  {
-    return is_none(get(pth, c));
-  }
-
-  bool is_bool(std::sv pth, const clon& c)
-  {
-    return is_bool(get(pth, c));
-  }
-
-  bool is_number(std::sv pth, const clon& c)
-  {
-    return is_number(get(pth, c));
-  }
-
-  bool is_string(std::sv pth, const clon& c)
-  {
-    return is_string(get(pth, c));
-  }
-
-  bool is_object(std::sv pth, const clon& c)
-  {
-    return is_object(get(pth, c));
-  }
-
-  boolean_cref as_bool(const clon& c)
-  {
-    return std::get<boolean>(c.val);
-  }
-
-  string_cref as_string(const clon& c)
-  {
-    return std::get<string>(c.val);
-  }
-
-  number_cref as_number(const clon& c)
-  {
-    return std::get<number>(c.val);
-  }
-
-  object_cref as_object(const clon& c)
-  {
-    return std::get<object>(c.val);
-  }
-
+  
   expected_character::expected_character(std::sv chars)
     : std::invalid_argument(
       fmt::format("expected characters : {}", chars))
@@ -838,16 +785,9 @@ namespace clon
       fmt::format("unreachable path : {}", pth))
   {}
 
-  clon parse(std::sv s)
+  root_clon parse(std::sv s)
   {
-    return parser::detail::parse(s.begin(), s.end());
-  }
-
-  clon parse_stream(std::istream& s)
-  {
-    std::istreambuf_iterator<char> in(s);
-    std::istreambuf_iterator<char> eos;
-    return parser::detail::parse(in, eos);
+    return parser::detail::parse(s);
   }
 
   const clon& get(std::sv path, const clon& c)
@@ -862,27 +802,27 @@ namespace clon
 
   const string& get_string(std::sv pth, const clon& c)
   {
-    return as_string(get(pth, c));
+    return as_<string>(get(pth, c));
   }
 
   const number& get_number(std::sv pth, const clon& c)
   {
-    return as_number(get(pth, c));
+    return as_<number>(get(pth, c));
   }
 
   const boolean& get_boolean(std::sv pth, const clon& c)
   {
-    return as_bool(get(pth, c));
+    return as_<boolean>(get(pth, c));
   }
 
   const object& get_object(std::sv pth, const clon& c)
   {
-    return as_object(get(pth, c));
+    return as_<object>(get(pth, c));
   }
 
   const bool exists(std::sv pth, const clon& c)
   {
-    return is_none(get(pth, c));;
+    return is_<none>(get(pth, c));;
   }
 
   const bool check(
@@ -892,8 +832,6 @@ namespace clon
   {
     const auto& all = get_all(pth, root);
     const checker::detail::constraint& cs = checker::detail::to_constraint(cstr);
-
-    std::size_t cnt = all.size();
 
     if (not utils::between(cs.mnmx.min, all.size(), cs.mnmx.max))
       return false;
@@ -910,10 +848,18 @@ namespace clon
     return stringify::detail::to_string(c);
   }
 
-  template<typename type_t>
-  const clon to_clon(const type_t& clon)
+  std::string_view to_original_string(const root_clon& c)
   {
-
+    return { c.buff.begin(), c.buff.end() };
   }
+
+  void to_clon(
+    temporary_buffer& tbuf,
+    std::sv name, const bool& b)
+  {
+    auto&& bs = b ? "true" : "false";
+    fmt::format_to(tbuf, R"(({} {}))", name, bs);
+  }
+
 }
 
