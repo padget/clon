@@ -24,19 +24,9 @@ namespace std
   template<typename type_t>
   using const_ref = std::reference_wrapper<const type_t>;
 
-  template<typename type_t>
-  concept number =
-    std::integral<type_t> or
-    std::floating_point<type_t>;
-
-  template<typename type_t>
-  concept char_sequence =
-    std::same_as<type_t, std::vector<char>> or
-    std::same_as<type_t, std::string> or
-    std::same_as<type_t, std::sv>;
 }
 
-namespace clon
+namespace clon::model
 {
   enum struct clon_type : int
   {
@@ -55,11 +45,6 @@ namespace clon
   using string = std::string_view;
   using object = std::vector<clon>;
 
-
-
-  using clon_refs = std::vector<std::const_ref<clon>>;
-  using clon_crefs = const clon_refs;
-
   using clon_value = std::variant<
     std::monostate, boolean,
     number, string, object>;
@@ -75,54 +60,73 @@ namespace clon
     std::buffer buff;
     clon root;
   };
+}
 
-  clon& undefined();
-  clon_type type(const clon& c);
+namespace clon::constraint
+{
 
   template<typename type_t>
-  concept value =
-    std::same_as<type_t, none> or
-    std::same_as<type_t, object> or
-    std::same_as<type_t, string> or
-    std::same_as<type_t, number> or
-    std::same_as<type_t, boolean>;
+  concept number =
+    std::integral<type_t> or
+    std::floating_point<type_t>;
 
-  template<value type_t>
-  const bool is_(const clon& c)
+  template<typename type_t>
+  concept char_sequence =
+    std::same_as<type_t, std::vector<char>> or
+    std::same_as<type_t, std::string> or
+    std::same_as<type_t, std::sv>;
+
+  template<typename type_t>
+  concept possible_value =
+    std::same_as<type_t, model::none> or
+    std::same_as<type_t, model::object> or
+    std::same_as<type_t, model::string> or
+    std::same_as<type_t, model::number> or
+    std::same_as<type_t, model::boolean>;
+}
+
+// namespace clon
+// {
+//   using none = model::none;
+//   using boolean = model::boolean;
+//   using string = model::string;
+//   using number = model::number;
+//   using object = model::object;
+//   using clon = model::clon;
+//   using clon_value = model::clon_value;
+//   using clon_type = model::clon_type;
+//   using root_clon = model::root_clon;
+// }
+
+namespace clon::basic
+{
+  model::clon& undefined();
+  model::clon_type type(const model::clon& c);
+
+  template<constraint::possible_value type_t>
+  const bool is_(const model::clon& c)
   {
-    if constexpr (std::is_same_v<type_t, boolean>)
-      return type(c) == clon_type::boolean;
-    if constexpr (std::is_same_v<type_t, object>)
-      return type(c) == clon_type::object;
-    if constexpr (std::is_same_v<type_t, string>)
-      return type(c) == clon_type::string;
-    if constexpr (std::is_same_v<type_t, number>)
-      return type(c) == clon_type::number;
-    if constexpr (std::is_same_v<type_t, none>)
-      return type(c) == clon_type::none;
-  }
-  
-  const clon& get(std::sv path, const clon& c);
-  clon_crefs get_all(std::sv path, const clon& c);
-
-  template<value type_t>
-  const bool is_(std::sv pth, const clon& c)
-  {
-    return is_<type_t>(get(pth, c));
+    if constexpr (std::is_same_v<type_t, model::boolean>)
+      return type(c) == model::clon_type::boolean;
+    if constexpr (std::is_same_v<type_t, model::object>)
+      return type(c) == model::clon_type::object;
+    if constexpr (std::is_same_v<type_t, model::string>)
+      return type(c) == model::clon_type::string;
+    if constexpr (std::is_same_v<type_t, model::number>)
+      return type(c) == model::clon_type::model::number;
+    if constexpr (std::is_same_v<type_t, model::none>)
+      return type(c) == model::clon_type::none;
   }
 
-  template<value type_t>
-  const type_t& as_(const clon& c)
+  template<constraint::possible_value type_t>
+  const type_t& as_(const model::clon& c)
   {
     return std::get<type_t>(c.val);
   }
+}
 
-  class expected_character : public std::invalid_argument
-  {
-  public:
-    expected_character(std::sv chars);
-  };
-
+namespace clon::path
+{
   class malformed_path : public std::invalid_argument
   {
   public:
@@ -147,64 +151,58 @@ namespace clon
     unreachable_path(std::sv pth);
   };
 
-  root_clon parse(std::sv s);
+  const model::clon& get(std::sv path, const model::clon& c);
+  std::vector<std::reference_wrapper<const model::clon>> get_all(
+    std::sv path, const model::clon& c);
+
+  template<constraint::possible_value type_t>
+  const bool is_(std::sv pth, const model::clon& c)
+  {
+    return basic::is_<type_t>(get(pth, c));
+  }
+
+  template<constraint::possible_value type_t>
+  const type_t& get_(std::sv pth, const model::clon& c)
+  {
+    return basic::as_<type_t>(get(pth, c));
+  }
+
+  const bool exists(std::sv pth, const model::clon& c);
+  const bool check(std::sv pth, std::sv cstr, const model::clon& root);
+}
+
+namespace clon::parsing
+{
+  class expected_character : public std::invalid_argument
+  {
+  public:
+    expected_character(std::sv chars);
+  };
+
+  model::root_clon parse(std::sv s);
 
   template<typename ... args>
-  root_clon parse_fmt(std::sv pattern, args&&... as)
+  model::root_clon parse_fmt(std::sv pattern, args&&... as)
   {
     return parse(fmt::format(pattern, as...));
   }
+}
 
-  const clon& get(std::sv path, const clon& c);
-  clon_crefs get_all(std::sv path, const clon& c);
+namespace clon::out
+{
+  std::string to_string(const model::clon& c);
+  std::string_view to_original_string(const model::root_clon& c);
 
-  template<value type_t>
-  const type_t& get_(std::sv pth, const clon& c)
-  {
-    return as_<type_t>(get(pth, c));
-  }
+}
 
-  const bool exists(std::sv pth, const clon& c);
-  const bool check(std::sv pth, std::sv cstr, const clon& root);
-
-  std::string to_string(const clon& c);
-  std::string_view to_original_string(const root_clon& c);
-
-  using temporary_buffer = fmt::memory_buffer;
-
-  template<typename type_t>
-  const clon to_clon(const type_t& t);
-
-  template<std::number type_t>
-  void to_clon(
-    temporary_buffer& tbuf,
-    std::sv name, const type_t& val)
-  {
-    fmt::format_to(tbuf, R"(({} {}))", name, val);
-  }
-
-  template<std::char_sequence type_t>
-  void to_clon(
-    temporary_buffer& tbuf,
-    std::sv name, const type_t& val)
-  {
-    fmt::format_to(tbuf, R"(({} "{}"))", name, val);
-  }
-
+namespace clon::in::model
+{
   template<typename type_t>
   struct clon_native
   {
     std::sv name;
     const type_t& val;
   };
-
-  template <typename type_t>
-  clon_native<type_t> pair(
-    std::sv name,
-    const type_t& val)
-  {
-    return { name, val };
-  }
 
   template<typename iterator_t>
   struct clon_sequence
@@ -214,37 +212,77 @@ namespace clon
     iterator_t e;
   };
 
-  template<typename iterator_t>
-  clon_sequence<iterator_t> sequence(
-    std::sv name,
-    iterator_t b,
-    iterator_t e) 
-  {
-    return  { name, b, e };
-  }
+  using temporary_buffer = fmt::memory_buffer;
+}
 
+namespace clon::in::constraint::detail
+{
   template<typename type_t>
   constexpr bool is_native_v = false;
 
   template<typename type_t>
-  constexpr bool is_native_v<clon_native<type_t>> = true;
+  constexpr bool is_native_v<model::clon_native<type_t>> = true;
 
-  template<typename type_t>
-  concept is_pair = is_native_v<type_t>;
 
   template<typename type_t>
   constexpr bool is_sequence_v = false;
 
   template<typename type_t>
-  constexpr bool is_sequence_v<clon_sequence<type_t>> = true;
+  constexpr bool is_sequence_v<model::clon_sequence<type_t>> = true;
+}
+
+namespace clon::in::constraint
+{
+  template<typename type_t>
+  concept is_pair = detail::is_native_v<type_t>;
 
   template<typename type_t>
-  concept is_sequence = is_sequence_v<type_t>;
+  concept is_sequence = detail::is_sequence_v<type_t>;
 
   template<typename type_t>
   concept clon_convertible =
     is_pair<type_t> or
     is_sequence<type_t>;
+}
+
+namespace clon::in::make
+{
+  template <typename type_t>
+  model::clon_native<type_t> native(
+    std::sv name,
+    const type_t& val)
+  {
+    return { name, val };
+  }
+
+  template<typename iterator_t>
+  model::clon_sequence<iterator_t> sequence(
+    std::sv name,
+    iterator_t b,
+    iterator_t e)
+  {
+    return  { name, b, e };
+  }
+}
+
+namespace clon::in
+{
+  template<clon::constraint::number type_t>
+  void to_clon(
+    temporary_buffer& tbuf,
+    std::sv name, const type_t& val)
+  {
+    fmt::format_to(tbuf, R"(({} {}))", name, val);
+  }
+
+  template<clon::constraint::char_sequence type_t>
+  void to_clon(
+    temporary_buffer& tbuf,
+    std::sv name, const type_t& val)
+  {
+    fmt::format_to(tbuf, R"(({} "{}"))", name, val);
+  }
+
 
   template<is_pair p>
   void to_clon_choice(
@@ -285,6 +323,16 @@ namespace clon
   void to_clon(
     temporary_buffer& tbuf,
     std::sv name, const bool& b);
+
+}
+
+namespace clon
+{
+
+
+
+
+
 
 }
 
