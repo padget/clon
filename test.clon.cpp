@@ -24,14 +24,14 @@ void cl1_should_be_parseable()
 
 void root_name_should_be_equal_to_log()
 {
-  const clon::root_clon& c = clon::parse(cl1);
+  const clon::root& c = clon::parse(cl1);
 
   test_equals(c.root.name, "log");
 }
 
-void root_clon_should_be_an_object()
+void root_should_be_an_object()
 {
-  const clon::root_clon& c = clon::parse(cl1);
+  const clon::root& c = clon::parse(cl1);
 
   test_equals(clon::is_<clon::object>(c.root), true);
   test_equals(clon::is_<clon::string>(c.root), false);
@@ -42,13 +42,13 @@ void root_clon_should_be_an_object()
 
 void to_string_must_fonctionne()
 {
-  const clon::root_clon& c = clon::parse(cl1);
+  const clon::root& c = clon::parse(cl1);
   std::cout << clon::to_string(c.root) << std::endl;
 }
 
 void to_original_string_must_fonctionne()
 {
-  const clon::root_clon& c = clon::parse(cl1);
+  const clon::root& c = clon::parse(cl1);
   std::cout << clon::to_original_string(c) << std::endl;
 }
 
@@ -62,31 +62,31 @@ void to_clon_must_fonctionne()
     std::vector<std::string> secondnames;
   };
 
-  auto to_clon = [](const person& p)
-  {
-    clon::temporary_buffer tbuff;
+  // auto to_clon = [](const person& p)
+  // {
+  //   clon::temporary_buffer tbuff;
 
-    clon::to_clon(tbuff, "person",
-      clon::pair("name", p.name),
-      clon::pair("firstname", p.firstname),
-      clon::pair("age", p.age),
-      clon::sequence("secondname",
-        p.secondnames.begin(), p.secondnames.end()));
+  //   clon::to_clon(tbuff, "person",
+  //     clon::pair("name", p.name),
+  //     clon::pair("firstname", p.firstname),
+  //     clon::pair("age", p.age),
+  //     clon::sequence("secondname",
+  //       p.secondnames.begin(), p.secondnames.end()));
 
-    return clon::parse(fmt::to_string(tbuff));
-  };
+  //   return clon::parse(fmt::to_string(tbuff));
+  // };
 
-  person p = { "padget", "pro", 32, {"jhon", "fidgeral"} };
+  // person p = { "padget", "pro", 32, {"jhon", "fidgeral"} };
 
-  clon::root_clon pc = to_clon(p);
-  std::cout << clon::to_original_string(pc) << '\n';
-  std::cout << clon::to_string(pc.root) << '\n';
-  std::cout << clon::to_string(clon::parse(clon::to_string(pc.root)).root) << '\n';
+  // clon::root pc = to_clon(p);
+  // std::cout << clon::to_original_string(pc) << '\n';
+  // std::cout << clon::to_string(pc.root) << '\n';
+  // std::cout << clon::to_string(clon::parse(clon::to_string(pc.root)).root) << '\n';
 }
 
 void get_many_toto()  
 {
-  const clon::root_clon& c = clon::parse(cl2);
+  const clon::root& c = clon::parse(cl2);
 
   for (auto&& item : clon::get_all("log:*.level:*", c.root))
     std::cout << item.get().name << std::endl;
@@ -94,7 +94,7 @@ void get_many_toto()
 
 void get_toto()
 {
-  const clon::root_clon& c = clon::parse(cl2);
+  const clon::root& c = clon::parse(cl2);
   for (auto&& item : clon::get_all("log:1", c.root))
     std::cout << item.get().name << std::endl;
 }
@@ -121,7 +121,7 @@ void check_test()
 int main(int argc, char** argv)
 {
   run_test(root_name_should_be_equal_to_log);
-  run_test(root_clon_should_be_an_object);
+  run_test(root_should_be_an_object);
   run_test(cl1_should_be_parseable);
   run_test(to_string_must_fonctionne);
   run_test(to_original_string_must_fonctionne);

@@ -1,4 +1,5 @@
 #include "clon.hpp"
+#include <tuple>
 
 namespace clon::utils
 {
@@ -39,6 +40,7 @@ namespace clon::utils
 
     switch (size)
     {
+      // TODO throw a meaning exception
     case 0: throw std::exception();
     case 1:
       return (v.back() - '0');
@@ -81,434 +83,32 @@ namespace clon::utils
   }
 }
 
-namespace clon::parser::detail
+clon::model::node& clon::basic::undefined()
 {
-  template<typename char_iterator>
-  clon_type next_could_be(
-    char_iterator b,
-    char_iterator e)
-  {
-    if (b != e)
-    {
-      char c = *b;
+  static clon::model::node c;
+  return c;
+}
 
-      if (c == '"')
-        return clon_type::string;
-      else if (c == '(')
-        return clon_type::object;
-      else if (c == 't')
-        return clon_type::boolean;
-      else if (c == 'f')
-        return clon_type::boolean;
-      else if (utils::between('0', c, '9'))
-        return clon_type::number;
-    }
-
-    return clon_type::none;
-  }
-
-
-
-  template<typename char_iterator>
-  std::sv object_name(
-    char_iterator b,
-    char_iterator e)
-  {
-    auto sb = b;
-
-    while (utils::between('a', *b, 'z'))
-      std::advance(b, 1);
-
-    return std::sv(sb, b);
-  }
-
-  template<typename type_t, typename iterator>
-  struct parse_result
-  {
-    type_t val;
-    iterator i;
-  };
-
-
-  template<typename char_iterator>
-  char_iterator parse_until(
-    char_iterator b,
-    char_iterator e,
-    const char c)
-  {
-    while (b != e and *b != c)
-      std::advance(b, 1);
-
-    if (b == e)
-      throw expected_character(
-        fmt::format("'{}'", c));
-
-    return b;
-  }
-
-  template<typename char_iterator>
-  char_iterator parse_blank(
-    char_iterator b,
-    char_iterator e)
-  {
-    while (b != e and
-      (*b == ' ' or
-        *b == '\t' or
-        *b == '\n' or
-        *b == '\r'))
-      std::advance(b, 1);
-    return b;
-  }
-
-  template<typename char_iterator>
-  parse_result<string, char_iterator> parse_string(
-    char_iterator b,
-    char_iterator e)
-  {
-    if (b != e and *b == '"')
-    {
-      auto sb = b;
-      b = parse_until(std::next(b), e, '"');
-
-      if (b != e and *b == '"')
-        return {
-          string(std::next(sb), b),
-          std::next(b) };
-      else
-        throw expected_character("'\"'");
-    }
-
-    throw expected_character("'\"'");
-  }
-
-  template<typename char_iterator>
-  parse_result<number, char_iterator> parse_number(
-    char_iterator b,
-    char_iterator e)
-  {
-    if (b != e and utils::between('0', *b, '9'))
-    {
-      auto sb = b;
-
-      while (b != e and utils::between('0', *b, '9'))
-        std::advance(b, 1);
-
-      if (b != e and *b == '.')
-      {
-        std::advance(b, 1);
-
-        while (b != e and utils::between('0', *b, '9'))
-          std::advance(b, 1);
-      }
-
-      return { std::stod(std::string(sb, b)), b };
-    }
-
-    throw expected_character("[0-9]");
-  }
-
-  template<typename char_iterator>
-  parse_result<boolean, char_iterator> parse_bool(
-    char_iterator b,
-    char_iterator e)
-  {
-    auto b0 = b;
-    auto b1 = b0 != e ? std::next(b0) : e;
-    auto b2 = b1 != e ? std::next(b1) : e;
-    auto b3 = b2 != e ? std::next(b2) : e;
-    auto b4 = b3 != e ? std::next(b3) : e;
-    auto b5 = b4 != e ? std::next(b4) : e;
-
-    if (b0 != e and *b0 == 't' and
-      b1 != e and *b1 == 'r' and
-      b2 != e and *b2 == 'u' and
-      b3 != e and *b3 == 'e')
-      return { true, b4 };
-    else if (b0 != e and *b0 == 'f' and
-      b1 != e and *b1 == 'a' and
-      b2 != e and *b2 == 'l' and
-      b3 != e and *b3 == 's' and
-      b4 != e and *b4 == 'e')
-      return { false, b5 };
-
-    throw expected_character("true|false");
-  }
-
-  template<typename char_iterator>
-  parse_result<clon, char_iterator> parse_one(
-    char_iterator b,
-    char_iterator e);
-
-  template<typename char_iterator>
-  parse_result<object, char_iterator> parse_object(
-    char_iterator b,
-    char_iterator e)
-  {
-    if (b == e or *b != '(')
-      throw expected_character("'('");
-
-    object cls;
-
-    while (b != e and *b == '(')
-    {
-      auto&& res = parse_one(b, e);
-      cls.push_back(res.val);
-      b = res.i;
-      b = parse_blank(b, e);
-    }
-
-    return { cls, b };
-  }
-
-  template<typename char_iterator>
-  parse_result<clon, char_iterator> parse_one(
-    char_iterator b,
-    char_iterator e)
-  {
-    if (b == e or *b != '(')
-      throw expected_character("'('");
-
-    clon c;
-    b = parse_blank(std::next(b), e);
-    c.name = object_name(b, e);
-    std::advance(b, c.name.size());
-    b = parse_blank(b, e);
-
-    switch (next_could_be(b, e))
-    {
-    case clon_type::boolean:
-    {
-      auto&& bl = parse_bool(b, e);
-      b = bl.i;
-      c.val = bl.val;
-      break;
-    }
-    case clon_type::number:
-    {
-      auto&& nb = parse_number(b, e);
-      b = nb.i;
-      c.val = nb.val;
-      break;
-    }
-    case clon_type::string:
-    {
-      auto&& st = parse_string(b, e);
-      b = st.i;
-      c.val = st.val;
-      break;
-    }
-    case clon_type::object:
-    {
-      auto&& ob = parse_object(b, e);
-      b = ob.i;
-      c.val = ob.val;
-      break;
-    }
-    case clon_type::none:
-      throw expected_character("(|true|false|'\"'|[0-9]");
-    }
-
-    b = parse_blank(b, e);
-
-    if (b != e and *b == ')')
-      return { std::move(c), std::next(b) };
-
-    throw expected_character(")");
-  }
-
-  clon parse(
-    std::buffer::const_iterator b,
-    std::buffer::const_iterator e)
-  {
-    b = detail::parse_blank(b, e);
-    auto&& res = detail::parse_one(b, e);
-    b = res.i;
-    b = detail::parse_blank(b, e);
-
-    if (b == e)
-      return res.val;
-
-    // TODO error a définir
-    throw expected_character(std::sv(b, e));
-    //throw expected_character("EOF|'\\0'");
-  }
-
-  root_clon parse(std::sv s)
-  {
-    root_clon root;
-    root.buff = { s.begin(), s.end() };
-    root.root = parse(root.buff.begin(), root.buff.end());
-    return root;
-  }
-} // namespace detail
-
-namespace clon::getter::detail
+clon::model::clon_type clon::basic::type(const clon::model::node& c)
 {
-  struct path
+  switch (c.val.index())
   {
-    std::sv p;
-    std::size_t min = 0;
-    std::size_t max = 0;
-  };
-
-  using paths = std::vector<path>;
-
-  template <typename view_t>
-  std::sv to_sv(view_t&& v)
-  {
-    return std::sv(
-      &*std::ranges::begin(v),
-      std::ranges::distance(v));
-  }
-
-  path to_path(auto&& spath)
-  {
-    auto spl = spath | std::views::split(':');
-    auto cnt = std::ranges::distance(spl);
-
-    if (cnt > 2)
-      throw malformed_path(
-        fmt::format("more than once ':' in path '{}'", to_sv(spath)));
-
-    if (cnt == 0)
-    {
-      if (not utils::is_name(spath))
-        throw malformed_name(to_sv(spath));
-
-      return { to_sv(spath), 0 };
-    }
-    else
-    {
-      std::array<std::sv, 2> pthnb;
-      std::ranges::copy(
-        spl | std::views::transform([](auto&& v) {return to_sv(v);}),
-        std::begin(pthnb));
-
-      auto&& pth = pthnb[0];
-
-      if (pth.size() == 0)
-        throw malformed_path("empty path");
-
-      if (not utils::is_name(pth))
-        throw malformed_name(pth);
-
-      auto&& nb = pthnb[1];
-      std::size_t min = 0;
-      std::size_t max = 0;
-
-      if (nb.size() != 0)
-      {
-        if (utils::is_integer(nb))
-        {
-          min = utils::to_integer(nb);
-          max = min;
-        }
-        else if (nb == "*")
-        {
-          min = 0;
-          max = std::numeric_limits<std::size_t>::max();
-        }
-        else
-          throw malformed_number(nb);
-      }
-
-      return { pth, min , max };
-    }
-  }
-
-  auto has_same_name(
-    const path& pth)
-  {
-    return [&pth](auto&& c) {
-      return c.name == pth.p;
-    };
-  }
-
-  template<typename clbt>
-  void explore(
-    auto b,
-    auto e,
-    const clon& c,
-    const clbt& clb)
-  {
-    if (b == e)
-      clb(c);
-    else if (is_<object>(c))
-    {
-      const path& pth = *b;
-      std::size_t cnt(0);
-
-      for (auto&& item : as_<object>(c))
-        if (item.name == pth.p)
-        {
-          if (utils::between(pth.min, cnt, pth.max))
-            explore(std::next(b), e, item, clb);
-          else if (cnt > pth.max)
-            break;
-
-          cnt++;
-        }
-    }
-  }
-
-  template<typename clbt>
-  void explore(
-    std::sv pth,
-    const clon& c,
-    const clbt& clb)
-  {
-    constexpr auto to_pth = [](auto&& v) {
-      return to_path(v);
-    };
-
-    auto&& pths = pth
-      | std::views::split('.')
-      | std::views::transform(to_pth);
-
-    auto b = std::ranges::begin(pths);
-    auto e = std::ranges::end(pths);
-
-    explore(b, e, c, clb);
-  }
-
-  auto abufign_to(const clon*& ref)
-  {
-    return [&ref](const clon& c) {
-      ref = &c;
-    };
-  }
-
-  const clon& get(
-    std::sv pth,
-    const clon& c)
-  {
-    const clon* res = nullptr;
-    explore(pth, c, abufign_to(res));
-
-    if (res == nullptr)
-      return undefined();
-    else
-      return *res;
-  }
-
-  auto push_back(clon_refs& refs)
-  {
-    return [&](const clon& c) {
-      refs.push_back(c);
-    };
-  }
-
-  clon_crefs get_all(
-    std::sv pth,
-    const clon& c)
-  {
-    clon_refs refs;
-    explore(pth, c, push_back(refs));
-    return refs;
+  case 0:
+    return clon::model::clon_type::none;
+  case 1:
+    return clon::model::clon_type::boolean;
+  case 2:
+    return clon::model::clon_type::number;
+  case 3:
+    return clon::model::clon_type::string;
+  case 4:
+    return clon::model::clon_type::object;
+  default:
+    return clon::model::clon_type::none;
   }
 }
 
-namespace clon::checker::detail
+namespace clon::path::model
 {
   struct interval
   {
@@ -516,350 +116,723 @@ namespace clon::checker::detail
     std::size_t max;
   };
 
-  struct constraint
+  struct path
   {
-    clon_type type;
+    std::sv p;
     interval mnmx;
   };
 
-  struct constrained_path
+  using paths = std::vector<path>;
+
+  struct constraint
   {
-    std::sv path;
-    std::size_t min;
-    std::size_t max;
+    clon::model::clon_type type;
+    interval mnmx;
+  };
+}
+
+namespace clon::path
+{
+  clon::path::model::path to_path(std::sv spath);
+
+  void explore(
+    auto b, auto e,
+    const clon::model::node& c,
+    const auto& clb);
+
+  void explore(
+    std::sv pth,
+    const clon::model::node& c,
+    const auto& clb);
+
+
+  std::size_t to_bound(std::sv b);
+
+  clon::model::clon_type to_constraint_type(std::sv type);
+  clon::path::model::interval to_constraint_interval(std::sv mnmx);
+  clon::path::model::constraint to_constraint(std::sv cstr);
+}
+
+clon::path::malformed_path::malformed_path(std::sv reason)
+  : std::invalid_argument(
+    fmt::format("malformed path : {}", reason))
+{}
+
+clon::path::malformed_number::malformed_number(std::sv path)
+  : malformed_path(
+    fmt::format("malformed number '{}'", path))
+{}
+
+clon::path::malformed_name::malformed_name(std::sv path)
+  : malformed_path(
+    fmt::format("malformed name '{}'", path))
+{}
+
+clon::path::unreachable_path::unreachable_path(std::sv pth)
+  : std::invalid_argument(
+    fmt::format("unreachable path : {}", pth))
+{}
+
+clon::path::malformed_constraint::malformed_constraint(std::sv reason)
+  : std::invalid_argument(
+    fmt::format("malformed constraint : {}", reason))
+{}
+
+
+clon::path::model::path clon::path::to_path(std::sv spath)
+{
+  auto spl = spath | std::views::split(':');
+  auto cnt = std::ranges::distance(spl);
+
+  if (cnt > 2)
+    throw clon::path::malformed_path(
+      fmt::format("more than once ':' in path '{}'", spath));
+
+  if (cnt == 0)
+  {
+    if (not utils::is_name(spath))
+      throw clon::path::malformed_name(spath);
+
+    return { spath, 0 };
+  }
+  else
+  {
+    std::array<std::sv, 2> pthnb;
+    std::ranges::copy(
+      spl | std::views::transform([](auto&& v) {
+        return std::sv(
+          &*std::ranges::begin(v),
+          std::ranges::distance(v));}),
+      std::begin(pthnb));
+
+    auto&& pth = pthnb[0];
+
+    if (pth.size() == 0)
+      throw clon::path::malformed_path("empty path");
+
+    if (not utils::is_name(pth))
+      throw clon::path::malformed_name(pth);
+
+    auto&& nb = pthnb[1];
+    std::size_t min = 0;
+    std::size_t max = 0;
+
+    if (nb.size() != 0)
+    {
+      if (clon::utils::is_integer(nb))
+      {
+        min = clon::utils::to_integer(nb);
+        max = min;
+      }
+      else if (nb == "*")
+      {
+        min = 0;
+        max = std::numeric_limits<std::size_t>::max();
+      }
+      else
+        throw clon::path::malformed_number(nb);
+    }
+
+    return { pth, {min , max} };
+  }
+}
+
+void clon::path::explore(
+  auto b, auto e,
+  const clon::model::node& c,
+  const auto& clb)
+{
+  if (b == e)
+    clb(c);
+  else if (clon::basic::is_<clon::model::object>(c))
+  {
+    const clon::path::model::path& pth = *b;
+    std::size_t cnt(0);
+
+    for (auto&& item : clon::basic::as_<clon::model::object>(c))
+      if (item.name == pth.p)
+      {
+        if (clon::utils::between(pth.mnmx.min, cnt, pth.mnmx.max))
+          clon::path::explore(std::next(b), e, item, clb);
+        else if (cnt > pth.mnmx.max)
+          break;
+
+        cnt++;
+      }
+  }
+}
+
+void clon::path::explore(
+  std::sv pth,
+  const clon::model::node& c,
+  const auto& clb)
+{
+  constexpr auto to_pth = [](auto&& v) {
+    std::sv s(&*std::ranges::begin(v), std::ranges::distance(v));
+    return clon::path::to_path(s);
   };
 
-  auto is_specific_char(const char spec)
-  {
-    return [=](const char& c)
-    {
-      return c == spec;
-    };
-  }
+  auto&& pths = pth
+    | std::views::split('.')
+    | std::views::transform(to_pth);
 
-  bool contains(
-    std::sv s,
-    const char c)
-  {
-    auto b = s.begin();
-    auto e = s.end();
-    return std::any_of(
-      b, e, is_specific_char(c));
-  }
+  auto b = std::ranges::begin(pths);
+  auto e = std::ranges::end(pths);
 
+  explore(b, e, c, clb);
+}
 
-  bool must_be_string(
-    std::sv constraint)
-  {
-    return contains(constraint, 's');
-  }
-
-  bool must_be_object(
-    std::sv constraint)
-  {
-    return contains(constraint, 'o');
-  }
-
-  bool must_be_number(
-    std::sv constraint)
-  {
-    return contains(constraint, 'n');
-  }
-
-  bool must_be_boolean(
-    std::sv constraint)
-  {
-    return contains(constraint, 'b');
-  }
-
-  class malformed_constraint
-    : public std::invalid_argument
-  {
-  public:
-    malformed_constraint(
-      std::sv reason)
-      : std::invalid_argument(
-        fmt::format(
-          "malformed constraint : {}", reason))
-    {}
+auto assign_to(const clon::model::node*& ref)
+{
+  return [&ref](const clon::model::node& c) {
+    ref = &c;
   };
+}
 
-  clon_type to_constraint_type(
-    std::sv type)
+const clon::model::node& clon::path::get(
+  std::sv pth,
+  const clon::model::node& c)
+{
+  const clon::model::node* res = nullptr;
+  explore(pth, c, assign_to(res));
+
+  if (res == nullptr)
+    return clon::basic::undefined();
+  else
+    return *res;
+}
+
+auto push_back(std::vector<std::reference_wrapper<const clon::model::node>>& refs)
+{
+  return [&](const clon::model::node& c)
   {
-    if (type.size() != 1)
-      throw malformed_constraint(
-        "the type must be made of one letter");
+    refs.push_back(c);
+  };
+}
 
-    const char& c = *(type.begin());
+const std::vector<std::reference_wrapper<const clon::model::node>> clon::path::get_all(
+  std::sv pth, const clon::model::node& c)
+{
+  std::vector<std::reference_wrapper<const clon::model::node>> refs;
+  clon::path::explore(pth, c, push_back(refs));
+  return refs;
+}
 
-    switch (c)
-    {
-    case 'o': return clon_type::object;
-    case 's': return clon_type::string;
-    case 'n': return clon_type::number;
-    case 'b': return clon_type::boolean;
-    default: throw malformed_constraint(
+std::size_t clon::path::to_bound(std::sv b)
+{
+  if (clon::utils::is_integer(b))
+    return clon::utils::to_integer(b);
+  else if (b == "*")
+    return std::numeric_limits<std::size_t>::max();
+  else
+    throw clon::path::malformed_constraint(
+      "the interval boundary must be a integer or '*'");
+}
+
+clon::model::clon_type clon::path::to_constraint_type(std::sv type)
+{
+  if (type.size() != 1)
+    throw clon::path::malformed_constraint(
       "the type must be made of one letter :"
       " 's', 'o', 'b', 'n'");
-    }
-  }
 
-  std::size_t to_bound(
-    std::sv b)
+  const char& c = *(type.begin());
+
+  switch (c)
   {
-    if (utils::is_integer(b))
-      return utils::to_integer(b);
-    else if (b == "*")
-      return std::numeric_limits<std::size_t>::max();
-    else
-      throw malformed_constraint(
-        "the interval boundary must be a integer or '*'");
-  }
-
-  interval to_constraint_interval(
-    std::sv mnmx)
-  {
-    auto b = mnmx.begin();
-    auto e = mnmx.end();
-    auto toks = utils::tokenizer(b, e, '-');
-    auto cnt = utils::count(toks);
-
-    if (cnt != 1)
-      throw malformed_constraint(
-        "the interval must contains one '-'");
-
-    auto&& min = to_bound(utils::next_token(toks));
-    auto&& max = to_bound(utils::next_token(toks));
-
-    if (min > max)
-      throw malformed_constraint(
-        "the interval min must be inferior to max");
-
-    return { min, max };
-  }
-
-  constraint to_constraint(
-    std::sv cstr)
-  {
-    auto b = cstr.begin();
-    auto e = cstr.end();
-    auto toks = utils::tokenizer(b, e, ':');
-    auto cnt = utils::count(toks);
-
-    if (cnt != 1)
-      throw malformed_constraint(
-        "constraint must contain one ':'");
-
-    auto&& type = to_constraint_type(utils::next_token(toks));
-    auto&& mnmx = to_constraint_interval(utils::next_token(toks));
-
-    return { type, mnmx };
+  case 'o': return clon::model::clon_type::object;
+  case 's': return clon::model::clon_type::string;
+  case 'n': return clon::model::clon_type::number;
+  case 'b': return clon::model::clon_type::boolean;
+  default: throw clon::path::malformed_constraint(
+    "the type must be made of one letter :"
+    " 's', 'o', 'b', 'n'");
   }
 }
 
-namespace clon::stringify::detail
+clon::path::model::interval clon::path::to_constraint_interval(std::sv mnmx)
 {
-  inline void to_string_basic(
-    fmt::memory_buffer& buf,
-    const clon& c);
+  auto b = mnmx.begin();
+  auto e = mnmx.end();
+  auto toks = clon::utils::tokenizer(b, e, '-');
+  auto cnt = clon::utils::count(toks);
 
-  inline void to_string_bool(
-    fmt::memory_buffer& buf,
-    const clon& c)
-  {
-    fmt::format_to(buf, "{}", (as_<boolean>(c) ? "true" : "false"));
-  }
+  if (cnt != 1)
+    throw clon::path::malformed_constraint(
+      "the interval must contains one '-'");
 
-  inline void to_string_string(
-    fmt::memory_buffer& buf,
-    const clon& c)
-  {
-    fmt::format_to(buf, "\"{}\"", as_<string>(c));
-  }
+  std::size_t min = clon::path::to_bound(clon::utils::next_token(toks));
+  std::size_t max = clon::path::to_bound(clon::utils::next_token(toks));
 
-  inline void to_string_number(
-    fmt::memory_buffer& buf,
-    const clon& c)
-  {
-    fmt::format_to(buf, "{}", as_<number>(c));
-  }
+  if (min > max)
+    throw clon::path::malformed_constraint(
+      "the interval min must be inferior to max");
 
-  inline void to_string_object(
-    fmt::memory_buffer& buf,
-    const clon& c)
-  {
-    for (auto&& item : as_<object>(c))
-      to_string_basic(buf, item);
-  }
-
-  inline void to_string_basic(
-    fmt::memory_buffer& buf,
-    const clon& c)
-  {
-    fmt::format_to(buf, "({} ", c.name);
-
-    switch (type(c))
-    {
-    case clon_type::boolean:
-      to_string_bool(buf, c);
-      break;
-    case clon_type::number:
-      to_string_number(buf, c);
-      break;
-    case clon_type::string:
-      to_string_string(buf, c);
-      break;
-    case clon_type::object:
-      to_string_object(buf, c);
-      break;
-    case clon_type::none:
-      break;
-    }
-
-    fmt::format_to(buf, ")");
-  }
-
-  std::string to_string(const clon& c)
-  {
-    fmt::memory_buffer buf;
-    to_string_basic(buf, c);
-    return fmt::to_string(buf);
-  }
+  return { min, max };
 }
 
-namespace clon
+clon::path::model::constraint clon::path::to_constraint(std::sv cstr)
 {
+  auto b = cstr.begin();
+  auto e = cstr.end();
+  clon::utils::tokenizer toks(b, e, ':');
+  std::size_t cnt = clon::utils::count(toks);
+
+  if (cnt != 1)
+    throw clon::path::malformed_constraint(
+      "constraint must contain one ':'");
+
+  return {
+    clon::path::to_constraint_type(clon::utils::next_token(toks)),
+    clon::path::to_constraint_interval(clon::utils::next_token(toks)) };
 }
 
-namespace clon
+const bool clon::path::check(
+  std::sv pth,
+  std::sv cstr,
+  const clon::model::node& root)
 {
-  clon& undefined()
-  {
-    static clon c;
-    return c;
-  }
+  const auto& all = clon::path::get_all(pth, root);
+  const clon::path::model::constraint& cs = clon::path::to_constraint(cstr);
 
-  clon_type type(const clon& c)
-  {
-    switch (c.val.index())
-    {
-    case 0:
-      return clon_type::none;
-    case 1:
-      return clon_type::boolean;
-    case 2:
-      return clon_type::number;
-    case 3:
-      return clon_type::string;
-    case 4:
-      return clon_type::object;
-    default:
-      return clon_type::none;
-    }
-  }
+  if (not clon::utils::between(cs.mnmx.min, all.size(), cs.mnmx.max))
+    return false;
 
-  
-  expected_character::expected_character(std::sv chars)
-    : std::invalid_argument(
-      fmt::format("expected characters : {}", chars))
-  {}
-
-  malformed_path::malformed_path(std::sv reason)
-    : std::invalid_argument(
-      fmt::format("malformed path : {}", reason))
-  {}
-
-  malformed_number::malformed_number(std::sv path)
-    : malformed_path(
-      fmt::format("malformed number '{}'", path))
-  {}
-
-  malformed_name::malformed_name(std::sv path)
-    : malformed_path(
-      fmt::format("malformed name '{}'", path))
-  {}
-
-  unreachable_path::unreachable_path(std::sv pth)
-    : std::invalid_argument(
-      fmt::format("unreachable path : {}", pth))
-  {}
-
-  root_clon parse(std::sv s)
-  {
-    return parser::detail::parse(s);
-  }
-
-  const clon& get(std::sv path, const clon& c)
-  {
-    return getter::detail::get(path, c);
-  }
-
-  clon_crefs get_all(std::sv path, const clon& c)
-  {
-    return getter::detail::get_all(path, c);
-  }
-
-  const string& get_string(std::sv pth, const clon& c)
-  {
-    return as_<string>(get(pth, c));
-  }
-
-  const number& get_number(std::sv pth, const clon& c)
-  {
-    return as_<number>(get(pth, c));
-  }
-
-  const boolean& get_boolean(std::sv pth, const clon& c)
-  {
-    return as_<boolean>(get(pth, c));
-  }
-
-  const object& get_object(std::sv pth, const clon& c)
-  {
-    return as_<object>(get(pth, c));
-  }
-
-  const bool exists(std::sv pth, const clon& c)
-  {
-    return is_<none>(get(pth, c));;
-  }
-
-  const bool check(
-    std::sv pth,
-    std::sv cstr,
-    const clon& root)
-  {
-    const auto& all = get_all(pth, root);
-    const checker::detail::constraint& cs = checker::detail::to_constraint(cstr);
-
-    if (not utils::between(cs.mnmx.min, all.size(), cs.mnmx.max))
+  for (auto&& item : all)
+    if (type(item.get()) != cs.type)
       return false;
 
-    for (auto&& item : all)
-      if (type(item.get()) != cs.type)
-        return false;
-
-    return true;
-  }
-
-  std::string to_string(const clon& c)
-  {
-    return stringify::detail::to_string(c);
-  }
-
-  std::string_view to_original_string(const root_clon& c)
-  {
-    return { c.buff.begin(), c.buff.end() };
-  }
-
-  void to_clon(
-    temporary_buffer& tbuf,
-    std::sv name, const bool& b)
-  {
-    auto&& bs = b ? "true" : "false";
-    fmt::format_to(tbuf, R"(({} {}))", name, bs);
-  }
-
+  return true;
 }
 
+namespace clon::parsing
+{
+  template<typename char_iterator>
+  clon::model::clon_type next_could_be(
+    char_iterator b, char_iterator e);
+
+  template<typename char_iterator>
+  std::sv object_name(
+    char_iterator b, char_iterator e);
+
+  template<typename char_iterator>
+  char_iterator parse_until(
+    char_iterator b, char_iterator e, const char c);
+
+  template<typename char_iterator>
+  char_iterator parse_blank(
+    char_iterator b, char_iterator e);
+
+  template<typename char_iterator>
+  std::tuple<clon::model::string, char_iterator> parse_string(
+    char_iterator b, char_iterator e);
+
+  template<typename char_iterator>
+  std::tuple<clon::model::number, char_iterator> parse_number(
+    char_iterator b, char_iterator e);
+
+  template<typename char_iterator>
+  std::tuple<clon::model::boolean, char_iterator> parse_boolean(
+    char_iterator b, char_iterator e);
+
+  template<typename char_iterator>
+  std::tuple<clon::model::object, char_iterator> parse_object(
+    char_iterator b, char_iterator e);
+
+  template<typename char_iterator>
+  std::tuple<clon::model::node, char_iterator> parse_one(
+    char_iterator b, char_iterator e);
+
+  clon::model::node parse(
+    std::buffer::const_iterator b,
+    std::buffer::const_iterator e);
+}
+
+clon::parsing::expected_character::expected_character(std::sv chars)
+  : std::invalid_argument(
+    fmt::format("expected characters : {}", chars))
+{}
+
+template<typename char_iterator>
+clon::model::clon_type clon::parsing::next_could_be(
+  char_iterator b, char_iterator e)
+{
+  if (b != e)
+  {
+    char c = *b;
+
+    if (c == '"')
+      return clon::model::clon_type::string;
+    else if (c == '(')
+      return clon::model::clon_type::object;
+    else if (c == 't')
+      return clon::model::clon_type::boolean;
+    else if (c == 'f')
+      return clon::model::clon_type::boolean;
+    else if (utils::between('0', c, '9'))
+      return clon::model::clon_type::number;
+  }
+
+  return clon::model::clon_type::none;
+}
+
+template<typename char_iterator>
+std::sv clon::parsing::object_name(
+  char_iterator b, char_iterator e)
+{
+  auto sb = b;
+
+  while (clon::utils::between('a', *b, 'z'))
+    std::advance(b, 1);
+
+  return std::sv(sb, b);
+}
+
+template<typename char_iterator>
+char_iterator clon::parsing::parse_until(
+  char_iterator b, char_iterator e, const char c)
+{
+  while (b != e and *b != c)
+    std::advance(b, 1);
+
+  if (b == e)
+    throw clon::parsing::expected_character(
+      fmt::format("'{}'", c));
+
+  return b;
+}
+
+template<typename char_iterator>
+char_iterator clon::parsing::parse_blank(
+  char_iterator b, char_iterator e)
+{
+  while (b != e and
+    (*b == ' ' or
+      *b == '\t' or
+      *b == '\n' or
+      *b == '\r'))
+    std::advance(b, 1);
+  return b;
+}
+
+template<typename char_iterator>
+std::tuple<clon::model::string, char_iterator> clon::parsing::parse_string(
+  char_iterator b, char_iterator e)
+{
+  if (b != e and *b == '"')
+  {
+    auto sb = b;
+    b = clon::parsing::parse_until(std::next(b), e, '"');
+
+    if (b != e and *b == '"')
+      return {
+        clon::model::string(std::next(sb), b),
+        std::next(b) };
+    else
+      throw clon::parsing::expected_character("'\"'");
+  }
+
+  throw clon::parsing::expected_character("'\"'");
+}
+
+template<typename char_iterator>
+std::tuple<clon::model::number, char_iterator> clon::parsing::parse_number(
+  char_iterator b, char_iterator e)
+{
+  if (b != e and clon::utils::between('0', *b, '9'))
+  {
+    auto sb = b;
+
+    while (b != e and clon::utils::between('0', *b, '9'))
+      std::advance(b, 1);
+
+    if (b != e and *b == '.')
+    {
+      std::advance(b, 1);
+
+      while (b != e and clon::utils::between('0', *b, '9'))
+        std::advance(b, 1);
+    }
+
+    return { std::stod(std::string(sb, b)), b };
+  }
+
+  throw clon::parsing::expected_character("[0-9]");
+}
+
+template<typename char_iterator>
+std::tuple<clon::model::boolean, char_iterator> clon::parsing::parse_boolean(
+  char_iterator b, char_iterator e)
+{
+  auto b0 = b;
+  auto b1 = b0 != e ? std::next(b0) : e;
+  auto b2 = b1 != e ? std::next(b1) : e;
+  auto b3 = b2 != e ? std::next(b2) : e;
+  auto b4 = b3 != e ? std::next(b3) : e;
+  auto b5 = b4 != e ? std::next(b4) : e;
+
+  if (b0 != e and *b0 == 't' and
+    b1 != e and *b1 == 'r' and
+    b2 != e and *b2 == 'u' and
+    b3 != e and *b3 == 'e')
+    return { true, b4 };
+  else if (b0 != e and *b0 == 'f' and
+    b1 != e and *b1 == 'a' and
+    b2 != e and *b2 == 'l' and
+    b3 != e and *b3 == 's' and
+    b4 != e and *b4 == 'e')
+    return { false, b5 };
+
+  throw clon::parsing::expected_character("true|false");
+}
+
+template<typename char_iterator>
+std::tuple<clon::model::object, char_iterator> clon::parsing::parse_object(
+  char_iterator b,
+  char_iterator e)
+{
+  if (b == e or *b != '(')
+    throw clon::parsing::expected_character("'('");
+
+  object cls;
+
+  while (b != e and *b == '(')
+  {
+    auto&& res = parse_one(b, e);
+    cls.push_back(std::get<0>(res));
+    b = std::get<1>(res);
+    b = parse_blank(b, e);
+  }
+
+  return { cls, b };
+}
+
+template<typename char_iterator>
+std::tuple<clon::model::node, char_iterator> clon::parsing::parse_one(
+  char_iterator b, char_iterator e)
+{
+  if (b == e or *b != '(')
+    throw clon::parsing::expected_character("'('");
+
+  clon::model::node c;
+  b = clon::parsing::parse_blank(std::next(b), e);
+  c.name = clon::parsing::object_name(b, e);
+  std::advance(b, c.name.size());
+  b = clon::parsing::parse_blank(b, e);
+
+  switch (clon::parsing::next_could_be(b, e))
+  {
+  case clon::model::clon_type::boolean:
+  {
+    auto&& bl = clon::parsing::parse_boolean(b, e);
+    b = std::get<1>(bl);
+    c.val = std::get<0>(bl);
+    break;
+  }
+  case clon::model::clon_type::number:
+  {
+    auto&& nb = clon::parsing::parse_number(b, e);
+    b = std::get<1>(nb);
+    c.val = std::get<0>(nb);
+    break;
+  }
+  case clon::model::clon_type::string:
+  {
+    auto&& st = clon::parsing::parse_string(b, e);
+    b = std::get<1>(st);
+    c.val = std::get<0>(st);
+    break;
+  }
+  case clon::model::clon_type::object:
+  {
+    auto&& ob = clon::parsing::parse_object(b, e);
+    b = std::get<1>(ob);
+    c.val = std::get<0>(ob);
+    break;
+  }
+  case clon::model::clon_type::none:
+    throw clon::parsing::expected_character("(|true|false|'\"'|[0-9]");
+  }
+
+  b = clon::parsing::parse_blank(b, e);
+
+  if (b != e and *b == ')')
+    return { std::move(c), std::next(b) };
+
+  throw clon::parsing::expected_character(")");
+}
+
+clon::model::node clon::parsing::parse(
+  std::buffer::const_iterator b,
+  std::buffer::const_iterator e)
+{
+  b = clon::parsing::parse_blank(b, e);
+  auto&& res = clon::parsing::parse_one(b, e);
+  b = std::get<1>(res);
+  b = clon::parsing::parse_blank(b, e);
+
+  if (b == e)
+    return std::get<0>(res);
+
+  throw clon::parsing::expected_character("EOF|'\\0'");
+}
+
+clon::model::root clon::parsing::parse(std::sv s)
+{
+  clon::model::root root;
+  root.buff = { s.begin(), s.end() };
+  root.root = parse(root.buff.begin(), root.buff.end());
+  return root;
+}
+
+
+namespace clon::out
+{
+  void to_string_basic(
+    fmt::memory_buffer& buf,
+    const clon::model::node& c);
+
+  void to_string_boolean(
+    fmt::memory_buffer& buf,
+    const clon::model::node& c);
+
+  void to_string_string(
+    fmt::memory_buffer& buf,
+    const clon::model::node& c);
+
+  void to_string_number(
+    fmt::memory_buffer& buf,
+    const clon::model::node& c);
+
+  void to_string_object(
+    fmt::memory_buffer& buf,
+    const clon::model::node& c);
+}
+
+void clon::out::to_string_basic(
+  fmt::memory_buffer& buf,
+  const clon::model::node& c);
+
+void clon::out::to_string_boolean(
+  fmt::memory_buffer& buf,
+  const clon::model::node& c)
+{
+  fmt::format_to(buf, "{}", (clon::basic::as_<clon::model::boolean>(c) ? "true" : "false"));
+}
+
+void clon::out::to_string_string(
+  fmt::memory_buffer& buf,
+  const clon::model::node& c)
+{
+  fmt::format_to(buf, "\"{}\"", clon::basic::as_<clon::model::string>(c));
+}
+
+void clon::out::to_string_number(
+  fmt::memory_buffer& buf,
+  const clon::model::node& c)
+{
+  fmt::format_to(buf, "{}", clon::basic::as_<clon::model::number>(c));
+}
+
+void clon::out::to_string_object(
+  fmt::memory_buffer& buf,
+  const clon::model::node& c)
+{
+  for (auto&& item : clon::basic::as_<clon::model::object>(c))
+    clon::out::to_string_basic(buf, item);
+}
+
+void clon::out::to_string_basic(
+  fmt::memory_buffer& buf,
+  const clon::model::node& c)
+{
+  fmt::format_to(buf, "({} ", c.name);
+
+  switch (type(c))
+  {
+  case clon::model::clon_type::boolean:
+    clon::out::to_string_boolean(buf, c);
+    break;
+  case clon::model::clon_type::number:
+    clon::out::to_string_number(buf, c);
+    break;
+  case clon::model::clon_type::string:
+    clon::out::to_string_string(buf, c);
+    break;
+  case clon::model::clon_type::object:
+    clon::out::to_string_object(buf, c);
+    break;
+  case clon::model::clon_type::none:
+    break;
+  }
+
+  fmt::format_to(buf, ")");
+}
+
+std::string clon::out::to_string(const clon::model::node& c)
+{
+  fmt::memory_buffer buf;
+  clon::out::to_string_basic(buf, c);
+  return fmt::to_string(buf);
+}
+
+std::sv clon::out::to_original_string(const root& c)
+{
+  return { c.buff.begin(), c.buff.end() };
+}
+
+void clon::in::to_clon(
+  clon::in::model::temporary_buffer& tbuf,
+  std::sv name, const bool& b)
+{
+  constexpr std::sv trues = "true";
+  constexpr std::sv falses = "false";
+  std::sv bs = b ? trues : falses;
+  fmt::format_to(tbuf, R"(({} {}))", name, bs);
+}
+
+clon::node& clon::undefined()
+{
+  return clon::basic::undefined();
+}
+
+clon::clon_type clon::type(const clon::node& c)
+{
+  return clon::basic::type(c);
+}
+
+const clon::node& clon::get(std::sv path, const clon::node& c)
+{
+  return clon::path::get(path, c);
+}
+
+std::vector<std::reference_wrapper<const clon::node>> clon::get_all(
+  std::sv path, const clon::node& c)
+{
+  return clon::path::get_all(path, c);
+}
+
+const bool clon::check(std::sv pth, std::sv cstr, const clon::node& root)
+{
+  return clon::path::check(pth, cstr, root);
+}
+
+clon::root clon::parse(std::sv s)
+{
+  return clon::parsing::parse(s);
+}
+
+clon::root clon::parse_fmt(std::sv pattern, auto&&... as)
+{
+  return clon::parsing::parse_fmt(pattern, as...);
+}
+
+std::string clon::to_string(const clon::node& c)
+{
+  return clon::out::to_string(c);
+}
+
+std::sv clon::to_original_string(const clon::root& c)
+{
+  return clon::out::to_original_string(c);
+}
