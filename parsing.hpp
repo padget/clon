@@ -5,6 +5,7 @@
 #include <exception>
 #include <string_view>
 #include <stdexcept>
+#include <fmt/format.h>
 
 namespace clon::parsing
 {
