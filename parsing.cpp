@@ -196,7 +196,7 @@ std::tuple<clon::model::object, char_iterator> clon::parsing::parse_object(
   if (b == e or *b != '(')
     throw clon::parsing::expected_character("'('");
 
-  clon::model::object cls;
+  clon::model::object  cls;
 
   while (b != e and *b == '(')
   {

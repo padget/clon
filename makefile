@@ -40,7 +40,7 @@ inout.o: inout.cpp inout.hpp
 utils.o: utils.cpp utils.hpp
 	${CC} -o $@  -c $< ${LIBS} ${FLAGS}
 
-libclon.o: clon.o model.o parsing.o utils.o #inout.o  path.o
+libclon.o: clon.o model.o parsing.o utils.o path.o inout.o  
 	ld -relocatable $^ -o $@
 
 .PHONY: build
@@ -64,10 +64,15 @@ version: clon.hpp
 dist: libclon.o
 	zip clon-$(VERSION).zip $^
 
+.PHONY: install
+install:
+
 .PHONY: all
 all: version	
 	$(MAKE) clean
 	$(MAKE) build
 	$(MAKE) test
 	$(MAKE) dist 
+	$(MAKE) install
 	$(MAKE) clean-temporaries
+

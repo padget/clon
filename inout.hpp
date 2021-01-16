@@ -2,6 +2,7 @@
 #define __clon_inout_hpp__
 
 #include "model.hpp"
+#include "parsing.hpp"
 #include <string>
 #include <string_view>
 #include <fmt/format.h>
