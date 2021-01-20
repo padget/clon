@@ -1,97 +1,82 @@
-#TODO Reorganiser les targets dans un ordre logique
-COMPILER=g++-10
-LIBS=-lfmt
-FLAGS=-std=c++20 -Wall -O3
-VERSION=`more clon.hpp | grep CLON_VERSION | grep -Po '[0-9]+\.[0-9]+\.[0-9]+'`
-TITLESEP="------------------------------------------"
+CC          := g++-10
+LIBS        := -lfmt
+FLAGS       := -std=c++20 -Wall -pedantic -Werror
+VERSION     := $(shell more clon.hpp | grep CLON_VERSION | grep -Po '[0-9]+\.[0-9]+\.[0-9]+')
+DISTARCHIVE := clon-$(VERSION).zip
 
-.PHONY: all build test clean start version archive
+# $@ contient le target
+# $^ contient les dépendances
+# $< contient la première dépendance
 
-all: start clean build test version archive
+.PHONY: clean-temporaries
+clean-temporaries:
+	rm -f *.o *.test.out *.bench.out
 
+.PHONY: clean-doc
+clean-doc:
+
+.PHONY: clean-dist
+clean-dist:
+	rm -f $(DISTARCHIVE)
+
+.PHONY: clean	
+clean: clean-temporaries clean-doc clean-dist
+
+clon.o: clon.cpp clon.hpp
+	${CC} -o $@  -c $< ${LIBS} ${FLAGS}
+
+model.o: model.cpp model.hpp
+	${CC} -o $@  -c $< ${LIBS} ${FLAGS}
+
+parsing.o: parsing.cpp parsing.hpp
+	${CC} -o $@  -c $< ${LIBS} ${FLAGS}
+
+path.o: path.cpp path.hpp
+	${CC} -o $@  -c $< ${LIBS} ${FLAGS}
+
+inout.o: inout.cpp inout.hpp
+	${CC} -o $@  -c $< ${LIBS} ${FLAGS}
+
+utils.o: utils.cpp utils.hpp
+	${CC} -o $@  -c $< ${LIBS} ${FLAGS}
+
+libclon.o: clon.o model.o parsing.o utils.o path.o inout.o  
+	ld -relocatable $^ -o $@
+
+.PHONY: build
+build: libclon.o
+
+clon.test.o: clon.test.cpp
+	${CC} -o $@  -c $< ${LIBS} ${FLAGS}
+
+clon.test.out: clon.test.o libclon.o
+	@${CC} -o $@ $^ ${LIBS}
+
+.PHONY: test
+test: clon.test.out
+	./$<
+
+.PHONY: version
 version: clon.hpp
 	@echo version of application : ${VERSION}
 
-archive: zip-check clon.hpp clon.cpp dist/clon.o version
-	@zip dist/clon-${VERSION}.zip clon.hpp clon.cpp dist/clon.o 
-	@echo archive created clon-${VERSION}.zip
+.PHONY: dist
+dist: libclon.o README.md LICENSE
+	zip clon-$(VERSION).zip $^
 
-zip-check-title:
-	@echo ${TITLESEP}
-	@echo "-- check zip existence"
-	@echo ${TITLESEP}
+.PHONY: install
+install:
 
-zip-check: zip-check-title
-	@if [ -z `which zip` ]; then\
-		sudo apt install zip;\
-	fi
-	@echo ' -> Use of' `which zip`
+.PHONY: bench
+bench: 
 
-compiler-check-title:
-	@echo ${TITLESEP}
-	@echo "-- check ${COMPILER} existence"
-	@echo ${TITLESEP}
+.PHONY: all
+all: version	
+	$(MAKE) clean
+	$(MAKE) build
+	$(MAKE) test
+	$(MAKE) dist 
+	$(MAKE) bench
+	$(MAKE) install
+	$(MAKE) clean-temporaries
 
-compiler-check: compiler-check-title
-	@if [ -z `which ${COMPILER}` ]; then\
-		sudo apt install ${COMPILER};\
-	fi
-	@echo ' -> Use of' `which ${COMPILER}`
-
-start: 
-	@echo ${TITLESEP}
-	@echo "- clon library"
-	@echo ${TITLESEP}
-
-build_title: 
-	@echo ${TITLESEP}
-	@echo "-- build clon library"
-	@echo ${TITLESEP}
-	
-build: compiler-check build_title dist/clon.o
-	
-test_title:
-	@echo ${TITLESEP}
-	@echo "-- unit tests"
-	@echo ${TITLESEP}
-	
-test: compiler-check test_title tests/test.clon.out
-	@echo " -> running clon tests..."
-	@./tests/test.clon.out
-
-dist:
-	@echo " -> creation of dist directory..."
-	@mkdir dist
-
-tests:
-	@echo " -> creation of tests directory..."
-	@mkdir tests
-
-benchmarks:
-	@echo " -> creation of benchmarks directory..."
-	@mkdir benchmarks
-
-dist/clon.o: dist clon.cpp clon.hpp
-	@echo " -> building dist/clon.o..."
-	@${COMPILER} -o dist/clon.o  -c clon.cpp ${LIBS} ${FLAGS}
-
-tests/test.clon.o: tests test.clon.cpp
-	@echo " -> building tests/test.clon.o..." 
-	@${COMPILER} -o tests/test.clon.o -c test.clon.cpp ${FLAGS}
-
-tests/test.clon.out: tests tests/test.clon.o dist/clon.o
-	@echo " -> building tests/test.clon.out..."
-	@${COMPILER} -o tests/test.clon.out tests/test.clon.o dist/clon.o  ${LIBS} ${FLAGS} 
-
-clean_title:
-	@echo ${TITLESEP}
-	@echo "-- clean project"
-	@echo ${TITLESEP}
-
-clean: clean_title
-	@echo " -> remove dist directory..."
-	@rm -rf dist
-	@echo " -> remove tests directory..."
-	@rm -rf tests
-	@echo " -> remove archives *.zip"
-	@rm -f *.zip
