@@ -1,12 +1,46 @@
+###########################################
+#                                         #
+#                                         #
+#    ####### ###     ####### ####  ###    #
+#    ####### ###     ####### ####  ###    #
+#    ###     ###     ### ### ##### ###    #
+#    ###     ###     ### ### #########    #
+#    ###     ###     ### ### ### #####    #
+#    ####### ####### ####### ###  ####    #
+#    ####### ####### ####### ###  ####    #
+#                                         #
+#                                         #
+###########################################
+
+###########################################
+# Makefile of the libclon projet. 
+# Using  : make all
+# Author : Benjamin MATHIEU
+# Email  : padget.pro@gmail.com
+###########################################
+
+###########################################
+# VARIABLES
+###########################################
+
 CC          := g++-10
 LIBS        := -lfmt
 FLAGS       := -std=c++20 -Wall -pedantic -Werror
 VERSION     := $(shell more clon.hpp | grep CLON_VERSION | grep -Po '[0-9]+\.[0-9]+\.[0-9]+')
-DISTARCHIVE := clon-$(VERSION).zip
+DIST_PREFIX := libclon
+DIST				:= $(DIST_PREFIX)-$(VERSION).zip
 
 # $@ contient le target
 # $^ contient les dépendances
 # $< contient la première dépendance
+
+###########################################
+# TARGETS
+###########################################
+
+###########################################
+# 		CLEAN TARGETS
+###########################################
 
 .PHONY: clean-temporaries
 clean-temporaries:
@@ -17,10 +51,14 @@ clean-doc:
 
 .PHONY: clean-dist
 clean-dist:
-	rm -f $(DISTARCHIVE)
+	rm -f $(DIST_PREFIX)-*.zip
 
 .PHONY: clean	
 clean: clean-temporaries clean-doc clean-dist
+
+###########################################
+# 		BUILD TARGETS
+###########################################
 
 clon.o: clon.cpp clon.hpp
 	${CC} -o $@  -c $< ${LIBS} ${FLAGS}
@@ -46,6 +84,10 @@ libclon.o: clon.o model.o parsing.o utils.o path.o inout.o
 .PHONY: build
 build: libclon.o
 
+###########################################
+# 		TEST TARGETS
+###########################################
+
 clon.test.o: clon.test.cpp
 	${CC} -o $@  -c $< ${LIBS} ${FLAGS}
 
@@ -56,27 +98,43 @@ clon.test.out: clon.test.o libclon.o
 test: clon.test.out
 	./$<
 
-.PHONY: version
-version: clon.hpp
-	@echo version of application : ${VERSION}
+###########################################
+# 		DIST TARGETS
+###########################################
 
 .PHONY: dist
 dist: libclon.o README.md LICENSE
-	zip clon-$(VERSION).zip $^
+	zip $(DIST) $^
+
+###########################################
+# 		INSTALL TARGETS
+###########################################
 
 .PHONY: install
 install:
 
+###########################################
+# 		BENCH TARGETS
+###########################################
+
 .PHONY: bench
 bench: 
 
+###########################################
+#     ALL TARGETS
+###########################################
+
+.PHONY: version
+version: clon.hpp
+	@echo version of application : ${VERSION}
+
 .PHONY: all
 all: version	
-	$(MAKE) clean
-	$(MAKE) build
-	$(MAKE) test
-	$(MAKE) dist 
-	$(MAKE) bench
-	$(MAKE) install
-	$(MAKE) clean-temporaries
+	@$(MAKE) clean
+	@$(MAKE) build
+	@$(MAKE) test
+	@$(MAKE) dist 
+	@$(MAKE) bench
+	@$(MAKE) install
+	@$(MAKE) clean-temporaries
 
