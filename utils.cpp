@@ -4,16 +4,16 @@
 #include <stdexcept>
 
 bool clon::utils::between(
-  const char min,
-  const char c,
-  const char max)
+  const std::size_t min,
+  const std::size_t c,
+  const std::size_t max)
 {
   return min <= c and c <= max;
 }
 
 bool clon::utils::is_digit(const char c)
 {
-  return '0' <= c and c <= '9';
+  return clon::utils::between('0', c, '9');
 }
 
 bool clon::utils::is_integer(std::string_view s)

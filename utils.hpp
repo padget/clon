@@ -6,7 +6,10 @@
 
 namespace clon::utils
 {
-  bool between(const char min, const char c, const char max);
+  bool between(
+    const std::size_t min, 
+    const std::size_t c, 
+    const std::size_t max);
 
   bool is_digit(const char c);
   bool is_integer(std::string_view s);

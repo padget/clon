@@ -76,7 +76,6 @@ clon::path::malformed_constraint::malformed_constraint(std::string_view reason)
     fmt::format("malformed constraint : {}", reason))
 {}
 
-
 clon::path::model::path clon::path::to_path(std::string_view spath)
 {
   auto spl = spath | std::views::split(':');
@@ -134,6 +133,8 @@ clon::path::model::path clon::path::to_path(std::string_view spath)
     return { pth, {min , max} };
   }
 }
+
+#include <iostream>
 
 void clon::path::explore(
   auto b, auto e,

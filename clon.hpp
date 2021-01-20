@@ -39,7 +39,7 @@ namespace clon
   using string = clon::model::string;
   using object = clon::model::object;
 
-  node& undefined();
+  const node& undefined();
   clon_type type(const node& c);
 
   template<clon::constraint::possible_value type_t>
@@ -65,10 +65,16 @@ namespace clon
     std::sv path, const node& c);
 
   template<clon::constraint::possible_value type_t>
-  const bool is_(std::sv pth, const node& c);
+  const bool is_(std::sv pth, const node& c)
+  {
+    return is_<type_t>(get(pth, c));
+  }
 
   template<clon::constraint::possible_value type_t>
-  const type_t& get_(std::sv pth, const node& c);
+  const type_t& get_(std::sv pth, const node& c)
+  {
+    return as_<type_t>(get(pth, c));
+  }
 
   const bool check(std::sv pth, std::sv cstr, const node& root);
 

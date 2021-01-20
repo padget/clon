@@ -3,7 +3,7 @@
 #include <tuple>
 
 
-clon::node& clon::undefined()
+const clon::node& clon::undefined()
 {
   return clon::basic::undefined();
 }
