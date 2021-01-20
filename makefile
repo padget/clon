@@ -61,11 +61,14 @@ version: clon.hpp
 	@echo version of application : ${VERSION}
 
 .PHONY: dist
-dist: libclon.o
+dist: libclon.o README.md LICENSE
 	zip clon-$(VERSION).zip $^
 
 .PHONY: install
 install:
+
+.PHONY: bench
+bench: 
 
 .PHONY: all
 all: version	
@@ -73,6 +76,7 @@ all: version
 	$(MAKE) build
 	$(MAKE) test
 	$(MAKE) dist 
+	$(MAKE) bench
 	$(MAKE) install
 	$(MAKE) clean-temporaries
 

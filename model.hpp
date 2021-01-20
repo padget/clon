@@ -14,7 +14,7 @@ namespace clon::model
     boolean = 1,
     number = 2,
     string = 3,
-    object = 4,
+    object = 4
   };
 
   struct node;
