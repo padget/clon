@@ -2,7 +2,7 @@
 #define __clon_path_hpp__
 
 #include "model.hpp"
-#include <exception>
+#include <vector>
 #include <stdexcept>
 #include <string_view>
 

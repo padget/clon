@@ -3,8 +3,6 @@
 #include "model.hpp"
 
 #include <fmt/format.h>
-#include <algorithm>
-#include <ranges>
 
 namespace clon::path::model
 {
@@ -78,8 +76,8 @@ clon::path::malformed_constraint::malformed_constraint(std::string_view reason)
 
 clon::path::model::path clon::path::to_path(std::string_view spath)
 {
-  auto spl = spath | std::views::split(':');
-  auto cnt = std::ranges::distance(spl);
+  clon::utils::tokenizer toks(spath.begin(), spath.end(), ':');
+  auto cnt = clon::utils::count(toks);
 
   if (cnt > 2)
     throw clon::path::malformed_path(
@@ -94,15 +92,8 @@ clon::path::model::path clon::path::to_path(std::string_view spath)
   }
   else
   {
-    std::array<std::string_view, 2> pthnb;
-    std::ranges::copy(
-      spl | std::views::transform([](auto&& v) {
-        return std::string_view(
-          &*std::ranges::begin(v),
-          std::ranges::distance(v));}),
-      std::begin(pthnb));
-
-    auto&& pth = pthnb[0];
+    auto&& pth = *toks;
+    auto&& nb = *(++toks);
 
     if (pth.size() == 0)
       throw clon::path::malformed_path("empty path");
@@ -110,7 +101,6 @@ clon::path::model::path clon::path::to_path(std::string_view spath)
     if (not clon::utils::is_name(pth))
       throw clon::path::malformed_name(pth);
 
-    auto&& nb = pthnb[1];
     std::size_t min = 0;
     std::size_t max = 0;
 
@@ -166,19 +156,16 @@ void clon::path::explore(
   const clon::model::node& c,
   const auto& clb)
 {
-  constexpr auto to_pth = [](auto&& v) {
-    std::string_view s(&*std::ranges::begin(v), std::ranges::distance(v));
-    return clon::path::to_path(s);
+  constexpr auto to_pth = [](auto&& v) 
+  {
+    return clon::path::to_path(v);
   };
 
-  auto&& pths = pth
-    | std::views::split('.')
-    | std::views::transform(to_pth);
+  clon::utils::tokenizer toks(pth.begin(), pth.end(), '.');
+  clon::utils::transformer<clon::utils::tokenizer, to_pth> trs(
+    clon::utils::begin(toks), clon::utils::end(toks));
 
-  auto b = std::ranges::begin(pths);
-  auto e = std::ranges::end(pths);
-
-  explore(b, e, c, clb);
+  explore(clon::utils::begin(trs), clon::utils::end(trs), c, clb);
 }
 
 auto assign_to(const clon::model::node*& ref)
@@ -253,15 +240,14 @@ clon::path::model::interval clon::path::to_constraint_interval(std::string_view 
 {
   auto b = mnmx.begin();
   auto e = mnmx.end();
-  auto toks = clon::utils::tokenizer(b, e, '-');
-  auto cnt = clon::utils::count(toks);
+  clon::utils::tokenizer toks(b, e, '-');
 
-  if (cnt != 1)
+  if (clon::utils::count(toks) != 1)
     throw clon::path::malformed_constraint(
       "the interval must contains one '-'");
 
-  std::size_t min = clon::path::to_bound(clon::utils::next_token(toks));
-  std::size_t max = clon::path::to_bound(clon::utils::next_token(toks));
+  std::size_t min = clon::path::to_bound(*toks);
+  std::size_t max = clon::path::to_bound(*++toks);
 
   if (min > max)
     throw clon::path::malformed_constraint(
@@ -282,8 +268,8 @@ clon::path::model::constraint clon::path::to_constraint(std::string_view cstr)
       "constraint must contain one ':'");
 
   return {
-    clon::path::to_constraint_type(clon::utils::next_token(toks)),
-    clon::path::to_constraint_interval(clon::utils::next_token(toks)) };
+    clon::path::to_constraint_type(*toks),
+    clon::path::to_constraint_interval(*++toks) };
 }
 
 const bool clon::path::check(

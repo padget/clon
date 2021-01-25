@@ -1,6 +1,5 @@
 #include "clon.hpp"
 #include "utils.hpp"
-#include <tuple>
 
 
 const clon::node& clon::undefined()
@@ -32,11 +31,6 @@ const bool clon::check(std::string_view pth, std::string_view cstr, const clon::
 clon::root clon::parse(std::string_view s)
 {
   return clon::parsing::parse(s);
-}
-
-clon::root clon::parse_fmt(std::string_view pattern, auto&&... as)
-{
-  return clon::parsing::parse_fmt(pattern, as...);
 }
 
 std::string clon::to_string(const clon::node& c)

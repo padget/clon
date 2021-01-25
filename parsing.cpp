@@ -2,7 +2,6 @@
 #include "model.hpp"
 #include "utils.hpp"
 
-#include <exception>
 #include <stdexcept>
 #include <fmt/format.h>
 #include <vector>

@@ -1,6 +1,5 @@
 #include "utils.hpp"
 #include <algorithm>
-#include <exception>
 #include <stdexcept>
 
 bool clon::utils::between(
@@ -55,21 +54,54 @@ std::size_t clon::utils::count(const clon::utils::tokenizer& t)
   return std::count(t.b, t.e, t.sep);
 }
 
-std::string_view clon::utils::next_token(clon::utils::tokenizer& t)
+
+bool clon::utils::operator==(
+  const clon::utils::tokenizer& t1,
+  const clon::utils::tokenizer& t2)
 {
-  auto b = t.b;
+  return t1.b == t2.b and t1.e == t2.e and t1.sep == t2.sep;
+}
 
-  while (t.b != t.e)
-    if (*(t.b) == t.sep)
-    {
-      std::advance(t.b, 1);
-      break;
-    }
-    else
-      std::advance(t.b, 1);
+clon::utils::tokenizer
+clon::utils::begin(const clon::utils::tokenizer& t)
+{
+  return t;
+}
 
-  if (t.b == t.e)
-    return std::string_view(b, t.b);
-  else
-    return std::string_view(b, std::prev(t.b));
+clon::utils::tokenizer
+clon::utils::end(const clon::utils::tokenizer& t)
+{
+  return { t.e, t.e, t.sep };
+}
+
+clon::utils::tokenizer&
+clon::utils::operator++(clon::utils::tokenizer& t)
+{
+  while (t.b != t.e and *t.b != t.sep)
+    ++t.b;
+
+  if (t.b != t.e)
+    ++t.b;
+
+  return t;
+}
+
+clon::utils::tokenizer operator++(clon::utils::tokenizer& t, int)
+{
+  clon::utils::tokenizer tmp = t;
+  operator++(t);
+  return tmp;
+}
+
+std::string_view clon::utils::operator*(const clon::utils::tokenizer& t)
+{
+  auto tb = t.b;
+
+  while (tb != t.e and *tb != t.sep)
+    ++tb;
+
+  if (tb != t.e)
+    ++tb;
+
+  return std::string_view{ t.b, tb };
 }

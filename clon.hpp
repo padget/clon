@@ -1,18 +1,12 @@
 #ifndef __clon_hpp__
 #define __clon_hpp__
 
-#include <exception>
-#include <iostream>
-#include <istream>
 #include <limits>
 #include <stdexcept>
-#include <string>
 #include <string_view>
 #include <vector>
 #include <variant>
 #include <concepts>
-
-#include <fmt/format.h>
 
 #include "model.hpp"
 #include "path.hpp"
@@ -20,12 +14,6 @@
 #include "inout.hpp"
 
 #define CLON_VERSION 1.0.0 
-
-namespace std
-{
-  using sv = std::string_view;
-  using buffer = std::vector<char>;
-}
 
 namespace clon
 {
@@ -60,31 +48,35 @@ namespace clon
   using unreachable_path = clon::path::unreachable_path;
   using malformed_constraint = clon::path::malformed_constraint;
 
-  const node& get(std::sv path, const node& c);
+  const node& get(std::string_view path, const node& c);
   std::vector<std::reference_wrapper<const node>> get_all(
-    std::sv path, const node& c);
+    std::string_view path, const node& c);
 
   template<clon::constraint::possible_value type_t>
-  const bool is_(std::sv pth, const node& c)
+  const bool is_(std::string_view pth, const node& c)
   {
     return is_<type_t>(get(pth, c));
   }
 
   template<clon::constraint::possible_value type_t>
-  const type_t& get_(std::sv pth, const node& c)
+  const type_t& get_(std::string_view pth, const node& c)
   {
     return as_<type_t>(get(pth, c));
   }
 
-  const bool check(std::sv pth, std::sv cstr, const node& root);
+  const bool check(std::string_view pth, std::string_view cstr, const node& root);
 
   using expected_character = clon::parsing::expected_character;
 
-  root parse(std::sv s);
-  root parse_fmt(std::sv pattern, auto&&... as);
+  root parse(std::string_view s);
+  
+  root parse_fmt(std::string_view pattern, auto&&... as)
+  {
+    return clon::parsing::parse_fmt(pattern, as...);
+  }
 
   std::string to_string(const node& c);
-  std::sv to_original_string(const root& c);
+  std::string_view to_original_string(const root& c);
 
   template<typename type_t>
   using in_pair = clon::in::model::in_pair<type_t>;
@@ -94,14 +86,14 @@ namespace clon
 
   template <typename type_t>
   in_pair<type_t> pair(
-    std::sv name, const type_t& val)
+    std::string_view name, const type_t& val)
   {
     return clon::in::make::pair(name, val);
   }
 
   template<typename iterator_t>
   in_sequence<iterator_t> sequence(
-    std::sv name, iterator_t b, iterator_t e)
+    std::string_view name, iterator_t b, iterator_t e)
   {
     return clon::in::make::sequence(name, b, e);
   }

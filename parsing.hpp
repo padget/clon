@@ -2,7 +2,6 @@
 #define __clon_parsing_hpp__
 
 #include "model.hpp"
-#include <exception>
 #include <string_view>
 #include <stdexcept>
 #include <fmt/format.h>
