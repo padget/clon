@@ -195,3 +195,9 @@ all: version
 	@$(MAKE) install
 	@$(MAKE) clean-temporaries
 
+format.out: format.test.cpp 
+	${CC} -o $@  $< ${LIBS} ${FLAGS}
+	./$@
+
+format: format.out
+
