@@ -1,5 +1,7 @@
 #ifndef __clon_format_hpp__
-#define object_type
+#define __clon_format_hpp__
+
+#include <string_view>
 
 namespace clon::fmt
 {
@@ -17,10 +19,44 @@ namespace clon::fmt
     t.reserve(len);
   };
 
-  template<with_length ... ft>
-  length_t format_sum(const ft&... f)
+  template<length_t nb_len>
+  length_t format_sum(const length_t* lens)
   {
-    return (f.length() + ... + 0);
+    const length_t* e = lens + nb_len;
+    length_t sum = 0;
+    
+    while (lens != e)
+    {
+      sum += *lens;
+      ++lens;
+    }
+    
+    return sum;
+  }
+
+  template<typename pattern>
+  length_t pattern_length(const pattern& patt)
+  {
+    using char_t = typename pattern::value_type;
+
+    char_t frame[2] = { '\0', '\0' };
+    auto b = patt.begin();
+    auto e = patt.end();
+    length_t len = patt.size();
+
+    while (b != e)
+    {
+      frame[0] = *b;
+      b++;
+
+      if (b != e)
+        frame[1] = *b;
+
+      if (frame[0] == '{' and frame[1] == '}')
+        len - 2;
+    }
+
+    return len;
   }
 
   template<reservable res>
@@ -41,22 +77,20 @@ namespace clon::fmt
     (f.format_to(r), ...);
   }
 
-  template<typename res, typename ... ft>
-  res format(const ft&... f);
-
-  template<typename res, typename... ft>
+  template<typename res, with_length... ft>
   res format(const ft& ... f)
   {
-    length_t len = format_sum(f...);
-    std::cout << len << std::endl;
-    res r = static_cast<res&&>(reserve<res>(len));
-    format_to(r, f...);
+    length_t lens[sizeof...(ft)] = { f.length()... };
+    length_t len = format_sum<sizeof...(ft)>(lens);
+   // length_t plen = pattern_length(patt);
+    res r = static_cast<res&&>(reserve<res>(/*plen + */len));
+    format_to(r, /*patt,*/ f...);
     return r;
   }
 }
 
 namespace clon::fmt
-{ 
+{
   template<typename string_view>
   struct string_format
   {

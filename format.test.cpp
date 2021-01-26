@@ -1,5 +1,5 @@
 #include <iostream>
-#include "format.hpp"
+#include "format.hpp" 
 
 
 #include <string_view>
@@ -8,7 +8,7 @@
 int main()
 {
   namespace fmt = clon::fmt;
-  using namespace fmt;
+  using namespace fmt; 
 
   //std::cout << format<std::string>("{}{}{} \n", str("coucou"), idec(10302890), bl(false));
   //std::cout << format<std::string>(str("coucou"), idec(10302890), bl(false), str("\n"));
