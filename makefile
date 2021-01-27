@@ -23,7 +23,7 @@
 # VARIABLES
 ###########################################
 
-CC          := g++-10
+CC          := g++-10.1
 LIBS        := -lfmt
 FLAGS       := -std=c++20 -Wall -pedantic -Werror
 VERSION     := $(shell more clon.hpp | grep CLON_VERSION | grep -Po '[0-9]+\.[0-9]+\.[0-9]+')
@@ -195,7 +195,7 @@ all: version
 	@$(MAKE) install
 	@$(MAKE) clean-temporaries
 
-format.out: format.test.cpp 
+format.out: format.test.cpp format.hpp
 	${CC} -o $@  $< ${LIBS} ${FLAGS}
 	./$@
 

@@ -2,6 +2,7 @@
 #define __clon_format_hpp__
 
 #include <string_view>
+#include <concepts>
 
 namespace clon::fmt
 {
@@ -91,10 +92,19 @@ namespace clon::fmt
 
 namespace clon::fmt
 {
-  template<typename string_view>
-  struct string_format
+  template<
+    typename type_t, 
+    typename char_t = char>
+  struct formatter
   {
-    const string_view& data;
+    formatter() = delete;
+  };
+
+
+  template<typename char_t>
+  struct formatter<std::basic_string_view<char_t>, char_t>
+  {
+    const std::basic_string_view<char_t> data;
 
     length_t length() const
     {
@@ -108,21 +118,28 @@ namespace clon::fmt
     }
   };
 
-  string_format<std::string_view> str(const std::string_view& s)
+  template<typename char_t>
+  formatter<std::basic_string_view<char_t>, char_t> str(const std::basic_string_view<char_t>& s)
   {
     return { s };
   }
 
-  template<typename integral>
-  struct integral_format
+  template<typename char_t>
+  formatter<std::basic_string_view<char_t>, char_t> str(const char_t* s)
   {
-    const integral& i;
+    return { std::basic_string_view<char_t>(s) };
+  }
+
+  template<std::integral integral_t>
+  struct formatter<integral_t>
+  {
+    const integral_t i;
 
     clon::fmt::length_t length() const
     {
       constexpr unsigned base = 10;
       int count = 0;
-      int tmp = i;
+      integral_t tmp = i;
 
       while (tmp != 0)
       {
@@ -152,17 +169,18 @@ namespace clon::fmt
     }
   };
 
-  template<typename integral>
-  integral_format<integral> idec(const integral& i)
+  template<std::integral integral_t>
+  formatter<integral_t> idec(const integral_t& i)
   {
     return { i };
   }
 
-  struct boolean_format
+  template<>
+  struct formatter<bool>
   {
-    const bool& data;
+    const bool data;
 
-    inline length_t length() const
+    length_t length() const
     {
       return data ? 4 : 5;
     }
@@ -174,7 +192,7 @@ namespace clon::fmt
     }
   };
 
-  boolean_format bl(const bool& b)
+  formatter<bool> bl(const bool& b)
   {
     return { b };
   }
