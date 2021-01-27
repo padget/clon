@@ -195,6 +195,8 @@ all: version
 	@$(MAKE) install
 	@$(MAKE) clean-temporaries
 
+
+## FORMAT target. TODO merge with other targets
 format.out: format.test.cpp format.hpp
 	${CC} -o $@  $< ${LIBS} ${FLAGS}
 	./$@

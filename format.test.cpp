@@ -12,5 +12,5 @@ int main()
 
   //std::cout << format<std::string>("{}{}{} \n", str("coucou"), idec(10302890), bl(false));
   //std::cout << format<std::string>(str("coucou"), idec(10302890), bl(false), str("\n"));
-  std::cout << format<std::string>(str("coucou"), idec(9287392), bl(false), str("\n")); 
+  std::cout << format<std::string>(str("coucou"), idec(13021989), bl(false), str("\n")); 
 }

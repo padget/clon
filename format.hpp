@@ -60,33 +60,47 @@ namespace clon::fmt
     return len;
   }
 
-  template<reservable res>
-  res reserve(length_t len)
+  template<reservable buffer>
+  buffer reserve(length_t len)
   {
-    res r; r.reserve(len); return r;
+    buffer buf; 
+    buf.reserve(len); 
+
+    while (buf.size() < len) 
+      buf.push_back('\0');
+
+    return buf;
   }
 
-  template<typename res, typename type_t>
-  concept formatable = requires(const type_t & t, res & r)
+  template<typename iterator, typename type_t>
+  concept formatable = requires(const type_t & t, iterator b, iterator e)
   {
-    t.format_to(r);
+    t.format_to(b, e);
   };
 
-  template<typename res, typename ... ft>
-  void format_to(res& r, const ft&... f)
+  template<typename iterator, typename ... ft>
+  void format_to(iterator b, iterator e, const ft&... f)
   {
-    (f.format_to(r), ...);
+    ((f.format_to(b, std::next(b, f.length())), std::advance(b, f.length())), ...);
   }
 
-  template<typename res, with_length... ft>
-  res format(const ft& ... f)
+  template<typename pattern, typename iterator, typename ... ft>
+  void format_to_pattern(const pattern& ptrn, iterator b, iterator e, const ft&... f)
+  {
+    auto pb = ptr.begin();
+    auto pe = ptr.end();
+    ((f.format_to(b, std::next(b, f.length())), std::advance(b, f.length())), ...);
+  }
+
+  template<typename buffer, with_length... ft>
+  buffer format(const ft& ... f)
   {
     length_t lens[sizeof...(ft)] = { f.length()... };
     length_t len = format_sum<sizeof...(ft)>(lens);
-   // length_t plen = pattern_length(patt);
-    res r = static_cast<res&&>(reserve<res>(/*plen + */len));
-    format_to(r, /*patt,*/ f...);
-    return r;
+   
+    buffer&& buf = static_cast<buffer&&>(reserve<buffer>(len));
+    format_to(buf.begin(), buf.end(),  f...);
+    return buf;
   }
 }
 
@@ -111,10 +125,17 @@ namespace clon::fmt
       return data.length();
     }
 
-    template<typename buffer>
-    void format_to(buffer& s) const
+    template<typename iterator>
+    void format_to(iterator b, iterator e) const
     {
-      s.append(data);
+      length_t i = 0;
+
+      while (b != e)
+      {
+        *b = data[i];
+        ++b;
+        ++i;
+      }
     }
   };
 
@@ -134,37 +155,41 @@ namespace clon::fmt
   struct formatter<integral_t>
   {
     const integral_t i;
+    mutable length_t len = 0;
 
     clon::fmt::length_t length() const
     {
-      constexpr unsigned base = 10;
-      int count = 0;
-      integral_t tmp = i;
-
-      while (tmp != 0)
+      if (len != 0)
+        return len;
+      else 
       {
-        tmp = tmp / base;
-        count++;
+        constexpr unsigned base = 10;
+        integral_t tmp = i;
+
+        while (tmp != 0)
+        {
+          tmp = tmp / base;
+          len++;
+        }
       }
 
-      return count;
+      return len;
     }
 
-    template<typename buffer>
-    void format_to(buffer& s) const
+    template<typename iterator>
+    void format_to(iterator b, iterator e) const
     {
       constexpr auto digits = "0123456789";
       constexpr unsigned base = 10;
 
-      int tmp = i;
-      int count = 1;
-      s.append(length(), '0');
+      integral_t tmp = i;
+      e--;
 
       while (tmp != 0)
       {
-        s.at(s.size() - count) = digits[tmp % base];
+        *e = digits[tmp % base];
         tmp = tmp / base;
-        count++;
+        e--;
       }
     }
   };
@@ -185,10 +210,24 @@ namespace clon::fmt
       return data ? 4 : 5;
     }
 
-    template<typename buffer>
-    void format_to(buffer& s) const
+    template<typename iterator>
+    void format_to(iterator b, iterator e) const
     {
-      s.append(data ? "true" : "false");
+      if (data)
+      {
+        *b = 't'; b++;
+        *b = 'r'; b++;
+        *b = 'u'; b++;
+        *b = 'e';
+      }
+      else 
+      {
+        *b = 'f'; b++;
+        *b = 'a'; b++;
+        *b = 'l'; b++;
+        *b = 's'; b++;
+        *b = 'e';
+      }
     }
   };
 
