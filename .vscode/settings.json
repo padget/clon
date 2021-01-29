@@ -61,6 +61,10 @@
     "map": "cpp",
     "iomanip": "cpp",
     "mutex": "cpp",
-    "cfenv": "cpp"
+    "cfenv": "cpp",
+    "bitset": "cpp",
+    "complex": "cpp",
+    "set": "cpp",
+    "typeindex": "cpp"
   }
 }

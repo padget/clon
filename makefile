@@ -23,7 +23,7 @@
 # VARIABLES
 ###########################################
 
-CC          := g++-10.1
+CC          := g++-10
 LIBS        := -lfmt
 FLAGS       := -std=c++20 -Wall -pedantic -Werror
 VERSION     := $(shell more clon.hpp | grep CLON_VERSION | grep -Po '[0-9]+\.[0-9]+\.[0-9]+')
