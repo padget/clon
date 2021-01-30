@@ -1,5 +1,6 @@
 #ifndef __clon_format_hpp__
 #define __clon_format_hpp__
+#include <iostream>
 
 namespace clon::fmt
 {
@@ -132,6 +133,7 @@ namespace clon::fmt
     using const_iterator = const value_type *;
     using reverse_iterator = clon::fmt::reverse_raiterator<iterator>;
     using const_reverse_iterator = clon::fmt::reverse_raiterator<const_iterator>;
+    using position_type = size_type;
 
   private:
     iterator _b;
@@ -144,12 +146,16 @@ namespace clon::fmt
     constexpr chars_span() = default;
 
   public:
-    constexpr iterator begin() const { return _b; }
-    constexpr iterator end() const { return _e; }
+    constexpr iterator begin() { return _b; }
+    constexpr iterator end() { return _e; }
+    constexpr const_iterator begin() const { return _b; }
+    constexpr const_iterator end() const { return _e; }
     constexpr const_iterator cbegin() const { return _b; }
     constexpr const_iterator cend() const { return _e; }
     constexpr reverse_iterator rbegin() { return reverse_iterator(_e - 1); }
     constexpr reverse_iterator rend() { return reverse_iterator(_b - 1); }
+    constexpr const_reverse_iterator rbegin() const { return const_reverse_iterator(_e - 1); }
+    constexpr const_reverse_iterator rend() const { return const_reverse_iterator(_b - 1); }
     constexpr const_reverse_iterator crbegin() const { return const_reverse_iterator(_e - 1); }
     constexpr const_reverse_iterator crend() const { return const_reverse_iterator(_b - 1); }
 
@@ -159,8 +165,89 @@ namespace clon::fmt
     constexpr const_reference operator[](size_type i) const { return *(_b + i); }
 
   public:
+    constexpr chars_span subspan(size_type index, size_type n)
+    {
+      iterator p = index + n < size() ? _b + index : end();
+      size_type s = index + n < size() ? n : 0;
+      return chars_span(p, s);
+    }
+
+    constexpr const chars_span subspan(size_type index, size_type n) const
+    {
+      iterator p = index + n < size() ? _b + index : end();
+      size_type s = index + n < size() ? n : 0;
+      return chars_span(p, s);
+    }
+
     template <typename ochar_t>
-    constexpr iterator assign(const chars_span<ochar_t> o)
+    constexpr bool equals(const chars_span<ochar_t> &o) const
+    {
+      if (size() == o.size())
+      {
+        auto b = begin(), e = end();
+        auto ob = o.begin(), oe = o.end();
+
+        while (b != e and ob != oe and *b == *ob)
+        {
+          ++b;
+          ++ob;
+        }
+
+        return b == e and ob == oe;
+      }
+      else
+        return false;
+    }
+
+    template <typename ochar_t>
+    constexpr position_type
+    find(const chars_span<ochar_t> &o, size_type start = 0) const
+    {
+      if (o.size() == 0)
+        return size();
+
+      if (size() >= o.size())
+      {
+        size_type index = start;
+
+        while (index < size())
+        {
+          if (subspan(index, o.size()).equals(o))
+            return index;
+
+          ++index;
+        }
+      }
+
+      return size();
+    }
+
+    // template<typename ochar_t, int n>
+    // constexpr 
+
+    template <typename ochar_t>
+    constexpr const size_type count(const chars_span<ochar_t> &o) const
+    {
+      size_type cnt = 0;
+
+      if (o.size() < size())
+      {
+        size_type start = 0;
+
+        while (start < size())
+        {
+          if ((start = find(o, start)) != size())
+            cnt++;
+
+          start++;
+        }
+      }
+
+      return cnt;
+    }
+
+    template <typename ochar_t>
+    constexpr iterator assign(const chars_span<ochar_t> &o)
     {
       iterator b = begin();
       iterator e = end();
@@ -197,6 +284,16 @@ namespace clon::fmt
   struct lengths
   {
     length_t data[n] = {0};
+
+    constexpr length_t sum() const
+    {
+      length_t s = 0;
+
+      for (length_t i = 0; i < n; ++i)
+        s += data[i];
+
+      return s;
+    }
   };
 
   template <typename char_t, int narg>
@@ -212,24 +309,26 @@ namespace clon::fmt
   public:
     const length_t size() const
     {
-      char_t frame[2] = {'\0', '\0'};
-      auto b = pat.begin();
-      auto e = pat.end();
-      length_t len = pat.size();
+      std::cout << "lenght ";
+      constexpr chars_span<const char_t> placeholder("{}");
+      std::cout << pat.size();
+      std::cout << "-";
+      std::cout << placeholder.size();
+      std::cout << "-";
+      std::cout << pat.count(placeholder);
+      std::cout << std::endl;
+      return pat.size() - (placeholder.size() * pat.count(placeholder));
+    }
 
-      while (b != e)
-      {
-        frame[0] = *b;
-        b++;
+    const coordinates<narg>
+    coordinates_of(const lengths<narg> &lens)
+    {
+      coordinates<narg> coords;
+      constexpr chars_span<const char_t> placeholder("{}");
 
-        if (b != e)
-          frame[1] = *b;
+      auto coord = pat.find(placeholder);
 
-        if (frame[0] == '{' and frame[1] == '}')
-          len - 2;
-      }
-
-      return len;
+      return coords;
     }
 
     const coordinates<narg>
@@ -266,7 +365,7 @@ namespace clon::fmt
         ++b;
       }
 
-      return coordinates<narg>{idx};
+      return idx;
     }
   };
 } // namespace clon::fmt
@@ -285,17 +384,6 @@ namespace clon::fmt
     t.reserve(len);
   };
 
-  template <length_t len>
-  length_t format_sum(const length_t (&lens)[len])
-  {
-    length_t sum = 0;
-
-    for (length_t i = 0; i < len; ++i)
-      sum += lens[i];
-
-    return sum;
-  }
-
   template <reservable buffer>
   buffer reserve(length_t len)
   {
@@ -308,26 +396,32 @@ namespace clon::fmt
     return buf;
   }
 
-  template <typename char_t, typename... ft>
+  template <typename pchar_t, typename char_t, typename... ft>
   void format_to(
+      const pattern<pchar_t, sizeof...(ft)> &p,
       chars_span<char_t> cspan,
       const ft &... f)
   {
     auto b = cspan.begin();
+
     ((f.format_to(chars_span<char_t>(b, f.length())), b += f.length()), ...);
   }
 
-  template <reservable buffer, with_length... ft>
-  buffer format(const ft &... f)
+  template <
+      reservable buffer,
+      typename pchar_t,
+      int pn,
+      with_length... ft>
+  buffer format(const pchar_t (&p)[pn], const ft &... f)
   {
     using char_t = typename buffer::value_type;
+    using pattern_t = pattern<const pchar_t, sizeof...(ft)>;
 
-    length_t lens[sizeof...(ft)] = {f.length()...};
-    length_t len = format_sum(lens);
-
-    buffer &&buf = static_cast<buffer &&>(reserve<buffer>(len));
+    lengths<sizeof...(ft)> lens = {f.length()...};
+    buffer &&buf = reserve<buffer>(lens.sum());
     chars_span<char_t> cspan(&*buf.begin(), buf.size());
-    format_to(cspan, f...);
+    pattern_t patt(chars_span<const pchar_t>(p, pn));
+    format_to(patt, cspan, f...);
     return buf;
   }
 } // namespace clon::fmt
