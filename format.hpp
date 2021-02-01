@@ -117,6 +117,22 @@ namespace clon::fmt
 
 namespace clon::fmt
 {
+  template <int n>
+  struct lengths
+  {
+    length_t data[n] = {0};
+
+    constexpr length_t sum() const
+    {
+      length_t s = 0;
+
+      for (length_t i = 0; i < n; ++i)
+        s += data[i];
+
+      return s;
+    }
+  };
+
   template <typename char_t>
   struct chars_span
   {
@@ -148,14 +164,14 @@ namespace clon::fmt
   public:
     constexpr iterator begin() { return _b; }
     constexpr iterator end() { return _e; }
-    constexpr const_iterator begin() const { return _b; }
-    constexpr const_iterator end() const { return _e; }
+    constexpr const_iterator begin() const { return cbegin(); }
+    constexpr const_iterator end() const { return cend(); }
     constexpr const_iterator cbegin() const { return _b; }
     constexpr const_iterator cend() const { return _e; }
     constexpr reverse_iterator rbegin() { return reverse_iterator(_e - 1); }
     constexpr reverse_iterator rend() { return reverse_iterator(_b - 1); }
-    constexpr const_reverse_iterator rbegin() const { return const_reverse_iterator(_e - 1); }
-    constexpr const_reverse_iterator rend() const { return const_reverse_iterator(_b - 1); }
+    constexpr const_reverse_iterator rbegin() const { return crbegin(); }
+    constexpr const_reverse_iterator rend() const { return crend(); }
     constexpr const_reverse_iterator crbegin() const { return const_reverse_iterator(_e - 1); }
     constexpr const_reverse_iterator crend() const { return const_reverse_iterator(_b - 1); }
 
@@ -167,15 +183,15 @@ namespace clon::fmt
   public:
     constexpr chars_span subspan(size_type index, size_type n)
     {
-      iterator p = index + n < size() ? _b + index : end();
-      size_type s = index + n < size() ? n : 0;
+      iterator p = index + n <= size() ? _b + index : end();
+      size_type s = index + n <= size() ? n : 0;
       return chars_span(p, s);
     }
 
     constexpr const chars_span subspan(size_type index, size_type n) const
     {
-      iterator p = index + n < size() ? _b + index : end();
-      size_type s = index + n < size() ? n : 0;
+      iterator p = index + n <= size() ? _b + index : end();
+      size_type s = index + n <= size() ? n : 0;
       return chars_span(p, s);
     }
 
@@ -222,8 +238,37 @@ namespace clon::fmt
       return size();
     }
 
-    // template<typename ochar_t, int n>
-    // constexpr 
+    template <
+        int max,
+        typename ochar_t>
+    lengths<max> find_all(
+        const chars_span<ochar_t> &o,
+        const size_type start = 0) const
+    {
+      int nb = 0;
+      lengths<max> lens;
+      size_type ix = start;
+
+      while (nb < max and ix < size())
+      {
+        if ((ix = find(o, ix)) < size())
+        {
+          lens.data[nb] = ix;
+          ix += o.size();
+          ++nb;
+        }
+        else
+          ++ix;
+      }
+
+      while (nb < max)
+      {
+        lens.data[nb] = size();
+        ++nb;
+      }
+
+      return lens;
+    }
 
     template <typename ochar_t>
     constexpr const size_type count(const chars_span<ochar_t> &o) const
@@ -274,98 +319,75 @@ namespace clon::fmt
 
 namespace clon::fmt
 {
+
+  struct coordinate
+  {
+    length_t index;
+    length_t length;
+  };
+
   template <int n>
   struct coordinates
   {
     length_t data[n];
   };
 
-  template <int n>
-  struct lengths
-  {
-    length_t data[n] = {0};
-
-    constexpr length_t sum() const
-    {
-      length_t s = 0;
-
-      for (length_t i = 0; i < n; ++i)
-        s += data[i];
-
-      return s;
-    }
-  };
-
   template <typename char_t, int narg>
   struct pattern
   {
   private:
-    chars_span<char_t> pat;
-
+    chars_span<char_t> _pat;
+    lengths<narg> _lens;
+    coordinates<narg> _coords;
+    
   public:
-    pattern() = default;
-    pattern(chars_span<char_t> s) : pat(s) {}
+    template <typename... ft>
+    explicit pattern(chars_span<char_t> s, const ft &... f)
+        : _pat(s),
+          _lens{f.length()...}
+    {
+      static_assert(sizeof...(ft) == narg);
+      compile();
+    }
 
   public:
     const length_t size() const
     {
-      std::cout << "lenght ";
-      constexpr chars_span<const char_t> placeholder("{}");
-      std::cout << pat.size();
-      std::cout << "-";
-      std::cout << placeholder.size();
-      std::cout << "-";
-      std::cout << pat.count(placeholder);
-      std::cout << std::endl;
-      return pat.size() - (placeholder.size() * pat.count(placeholder));
+      constexpr chars_span<const char_t> brackets("{}");
+      return _pat.size() - (brackets.size() * _pat.count(brackets));
     }
 
-    const coordinates<narg>
-    coordinates_of(const lengths<narg> &lens)
+    const coordinates<narg> &
+    coords() const
     {
-      coordinates<narg> coords;
-      constexpr chars_span<const char_t> placeholder("{}");
-
-      auto coord = pat.find(placeholder);
-
-      return coords;
+      return _coords;
     }
 
-    const coordinates<narg>
-    get_idx(const lengths<narg> &lens) const
+  private:
+    void compile()
     {
-      coordinates<narg> idx;
-      length_t index = 0;
-      length_t arg = 0;
+      constexpr chars_span<const char_t> brackets("{}");
+      lengths<narg> &&idx = _pat.template find_all<narg>(brackets);
 
-      auto b = pat.cbegin();
-      auto e = pat.cend();
+      for (int i = 1; i < narg; i++)
+        if (idx.data[i] != _pat.size())
+          idx.data[i] = idx.data[i] - i * brackets.size();
 
-      while (b != e)
-      {
-        if (*b == '{')
+      for (int i = 0; i < narg; i++)
+        if (idx.data[i] < _pat.size())
         {
-          if (b != e)
+          if (i == 0)
+            _coords.data[i] = idx.data[i];
+          else
           {
-            ++b;
-
-            if (*b == '}')
-            {
-              idx.data[arg] = index;
-              index += lens.data[arg];
-              ++arg;
-            }
-            else
-              ++index;
+            const length_t &interlen = idx.data[i] - idx.data[i - 1];
+            const length_t &prevcoord = _coords.data[i - 1];
+            const length_t &prevlength = _lens.data[i - 1];
+            _coords.data[i] = prevcoord + prevlength + interlen;
           }
         }
-        else
-          ++index;
-
-        ++b;
-      }
-
-      return idx;
+        else 
+         _coords[i] = 
     }
   };
 } // namespace clon::fmt
