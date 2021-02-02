@@ -117,30 +117,76 @@ namespace clon::fmt
 
 namespace clon::fmt
 {
-  template <int n>
-  struct lengths
+  template <typename type_t, unsigned nb>
+  struct array
   {
-    length_t data[n] = {0};
-
-    constexpr length_t sum() const
-    {
-      length_t s = 0;
-
-      for (length_t i = 0; i < n; ++i)
-        s += data[i];
-
-      return s;
-    }
+    type_t data[nb];
   };
 
+  template <typename type_t, unsigned nb>
+  type_t *begin(array<type_t, nb> &arr)
+  {
+    return arr.data;
+  }
+
+  template <typename type_t, unsigned nb>
+  type_t *end(array<type_t, nb> &arr)
+  {
+    return begin(arr) + nb;
+  }
+
+  template <typename type_t, unsigned nb>
+  const type_t *begin(const array<type_t, nb> &arr)
+  {
+    return arr.data;
+  }
+
+  template <typename type_t, unsigned nb>
+  const type_t *end(const array<type_t, nb> &arr)
+  {
+    return begin(arr) + nb;
+  }
+
+  template <typename type_t, unsigned nb>
+  const unsigned size(const array<type_t, nb> &)
+  {
+    return nb;
+  }
+
+  template <typename type_t, unsigned nb>
+  array<type_t, nb> init(const type_t (&sa)[nb])
+  {
+    array<type_t, nb> arr;
+    unsigned i = 0;
+
+    for (type_t &t : arr)
+      t = sa[i++];
+
+    return arr;
+  }
+
+  template <typename type_t, unsigned nb>
+  type_t accumulate(const array<type_t, nb> &arr, const type_t &start)
+  {
+    type_t s = start;
+
+    for (const type_t &t : arr)
+      s += t;
+
+    return s;
+  }
+} // namespace clon::fmt
+
+namespace clon::fmt
+{
   template <typename char_t>
   struct chars_span
   {
   public:
     using char_type = char_t;
     using value_type = char_t;
-    using size_type = unsigned long long;
-    using difference_type = signed long long;
+    using size_type = unsigned int;
+    using difference_type = signed long;
     using reference = value_type &;
     using const_reference = const value_type &;
     using pointer = value_type *;
@@ -157,6 +203,7 @@ namespace clon::fmt
 
   public:
     constexpr explicit chars_span(pointer s, size_type len) : _b(s), _e(s + len) {}
+    constexpr explicit chars_span(pointer b, pointer e) : chars_span(b, e - b) {}
     template <int n>
     constexpr explicit chars_span(value_type (&s)[n]) : chars_span(s, n - 1) {}
     constexpr chars_span() = default;
@@ -238,38 +285,6 @@ namespace clon::fmt
       return size();
     }
 
-    template <
-        int max,
-        typename ochar_t>
-    lengths<max> find_all(
-        const chars_span<ochar_t> &o,
-        const size_type start = 0) const
-    {
-      int nb = 0;
-      lengths<max> lens;
-      size_type ix = start;
-
-      while (nb < max and ix < size())
-      {
-        if ((ix = find(o, ix)) < size())
-        {
-          lens.data[nb] = ix;
-          ix += o.size();
-          ++nb;
-        }
-        else
-          ++ix;
-      }
-
-      while (nb < max)
-      {
-        lens.data[nb] = size();
-        ++nb;
-      }
-
-      return lens;
-    }
-
     template <typename ochar_t>
     constexpr const size_type count(const chars_span<ochar_t> &o) const
     {
@@ -320,16 +335,10 @@ namespace clon::fmt
 namespace clon::fmt
 {
 
-  struct coordinate
+  template <int n, typename char_t>
+  struct chars_spans
   {
-    length_t index;
-    length_t length;
-  };
-
-  template <int n>
-  struct coordinates
-  {
-    length_t data[n];
+    chars_span<char_t> data[n];
   };
 
   template <typename char_t, int narg>
@@ -337,57 +346,57 @@ namespace clon::fmt
   {
   private:
     chars_span<char_t> _pat;
-    lengths<narg> _lens;
-    coordinates<narg> _coords;
-    
+    chars_spans<narg + 1, char_t> _inters;
+
   public:
-    template <typename... ft>
-    explicit pattern(chars_span<char_t> s, const ft &... f)
-        : _pat(s),
-          _lens{f.length()...}
+    explicit pattern(chars_span<char_t> s)
+        : _pat(s)
     {
-      static_assert(sizeof...(ft) == narg);
-      compile();
+      static_assert(narg > 0);
+      decompose();
     }
+
+    template <int n>
+    explicit pattern(char_t (&s)[n])
+        : pattern(chars_span(s, n)) {}
 
   public:
     const length_t size() const
     {
-      constexpr chars_span<const char_t> brackets("{}");
-      return _pat.size() - (brackets.size() * _pat.count(brackets));
+      length_t sum = 0;
+
+      for (int i = 0; i < narg + 1; i++)
+        sum += _inters.data[i].size();
+
+      return sum;
     }
 
-    const coordinates<narg> &
-    coords() const
+    const chars_spans<narg + 1, char_t> &
+    spans() const
     {
-      return _coords;
+      return _inters;
     }
 
   private:
-    void compile()
+    void decompose()
     {
       constexpr chars_span<const char_t> brackets("{}");
-      lengths<narg> &&idx = _pat.template find_all<narg>(brackets);
+      length_t start = 0;
+      length_t nb = 0;
 
-      for (int i = 1; i < narg; i++)
-        if (idx.data[i] != _pat.size())
-          idx.data[i] = idx.data[i] - i * brackets.size();
+      while (nb < narg + 1)
+      {
+        length_t found = _pat.find(brackets, start);
 
-      for (int i = 0; i < narg; i++)
-        if (idx.data[i] < _pat.size())
-        {
-          if (i == 0)
-            _coords.data[i] = idx.data[i];
-          else
-          {
-            const length_t &interlen = idx.data[i] - idx.data[i - 1];
-            const length_t &prevcoord = _coords.data[i - 1];
-            const length_t &prevlength = _lens.data[i - 1];
-            _coords.data[i] = prevcoord + prevlength + interlen;
-          }
-        }
-        else 
-         _coords[i] = 
+        auto b = _pat.begin() + start;
+        auto e = _pat.begin() + found;
+        _inters.data[nb] = chars_span<char_t>(b, e);
+
+        if (found < _pat.size())
+          start = found + brackets.size();
+
+        ++nb;
+      }
     }
   };
 } // namespace clon::fmt
@@ -439,7 +448,7 @@ namespace clon::fmt
     using char_t = typename buffer::value_type;
     using pattern_t = pattern<const pchar_t, sizeof...(ft)>;
 
-    lengths<sizeof...(ft)> lens = {f.length()...};
+    array<length_t, sizeof...(ft)> &&lens = init({f.length()...});
     buffer &&buf = reserve<buffer>(lens.sum());
     chars_span<char_t> cspan(&*buf.begin(), buf.size());
     pattern_t patt(chars_span<const pchar_t>(p, pn));
