@@ -124,6 +124,18 @@ namespace clon::fmt
   };
 
   template <typename type_t, unsigned nb>
+  array<type_t, nb> init_array(const type_t (&sa)[nb])
+  {
+    array<type_t, nb> arr;
+    unsigned i = 0;
+
+    for (type_t &t : arr)
+      t = sa[i++];
+
+    return arr;
+  }
+
+  template <typename type_t, unsigned nb>
   type_t *begin(array<type_t, nb> &arr)
   {
     return arr.data;
@@ -154,18 +166,6 @@ namespace clon::fmt
   }
 
   template <typename type_t, unsigned nb>
-  array<type_t, nb> init(const type_t (&sa)[nb])
-  {
-    array<type_t, nb> arr;
-    unsigned i = 0;
-
-    for (type_t &t : arr)
-      t = sa[i++];
-
-    return arr;
-  }
-
-  template <typename type_t, unsigned nb>
   type_t accumulate(const array<type_t, nb> &arr, const type_t &start)
   {
     type_t s = start;
@@ -179,174 +179,175 @@ namespace clon::fmt
 
 namespace clon::fmt
 {
-  template <typename char_t>
-  struct chars_span
+  template <typename type_t>
+  struct span
   {
-  public:
-    using char_type = char_t;
-    using value_type = char_t;
-    using size_type = unsigned int;
-    using difference_type = signed long;
-    using reference = value_type &;
-    using const_reference = const value_type &;
-    using pointer = value_type *;
-    using const_pointer = const value_type *;
-    using iterator = value_type *;
-    using const_iterator = const value_type *;
-    using reverse_iterator = clon::fmt::reverse_raiterator<iterator>;
-    using const_reverse_iterator = clon::fmt::reverse_raiterator<const_iterator>;
-    using position_type = size_type;
-
-  private:
-    iterator _b;
-    iterator _e;
-
-  public:
-    constexpr explicit chars_span(pointer s, size_type len) : _b(s), _e(s + len) {}
-    constexpr explicit chars_span(pointer b, pointer e) : chars_span(b, e - b) {}
-    template <int n>
-    constexpr explicit chars_span(value_type (&s)[n]) : chars_span(s, n - 1) {}
-    constexpr chars_span() = default;
-
-  public:
-    constexpr iterator begin() { return _b; }
-    constexpr iterator end() { return _e; }
-    constexpr const_iterator begin() const { return cbegin(); }
-    constexpr const_iterator end() const { return cend(); }
-    constexpr const_iterator cbegin() const { return _b; }
-    constexpr const_iterator cend() const { return _e; }
-    constexpr reverse_iterator rbegin() { return reverse_iterator(_e - 1); }
-    constexpr reverse_iterator rend() { return reverse_iterator(_b - 1); }
-    constexpr const_reverse_iterator rbegin() const { return crbegin(); }
-    constexpr const_reverse_iterator rend() const { return crend(); }
-    constexpr const_reverse_iterator crbegin() const { return const_reverse_iterator(_e - 1); }
-    constexpr const_reverse_iterator crend() const { return const_reverse_iterator(_b - 1); }
-
-  public:
-    constexpr size_type size() const { return _e - _b; }
-    constexpr reference operator[](size_type i) { return *(_b + i); }
-    constexpr const_reference operator[](size_type i) const { return *(_b + i); }
-
-  public:
-    constexpr chars_span subspan(size_type index, size_type n)
-    {
-      iterator p = index + n <= size() ? _b + index : end();
-      size_type s = index + n <= size() ? n : 0;
-      return chars_span(p, s);
-    }
-
-    constexpr const chars_span subspan(size_type index, size_type n) const
-    {
-      iterator p = index + n <= size() ? _b + index : end();
-      size_type s = index + n <= size() ? n : 0;
-      return chars_span(p, s);
-    }
-
-    template <typename ochar_t>
-    constexpr bool equals(const chars_span<ochar_t> &o) const
-    {
-      if (size() == o.size())
-      {
-        auto b = begin(), e = end();
-        auto ob = o.begin(), oe = o.end();
-
-        while (b != e and ob != oe and *b == *ob)
-        {
-          ++b;
-          ++ob;
-        }
-
-        return b == e and ob == oe;
-      }
-      else
-        return false;
-    }
-
-    template <typename ochar_t>
-    constexpr position_type
-    find(const chars_span<ochar_t> &o, size_type start = 0) const
-    {
-      if (o.size() == 0)
-        return size();
-
-      if (size() >= o.size())
-      {
-        size_type index = start;
-
-        while (index < size())
-        {
-          if (subspan(index, o.size()).equals(o))
-            return index;
-
-          ++index;
-        }
-      }
-
-      return size();
-    }
-
-    template <typename ochar_t>
-    constexpr const size_type count(const chars_span<ochar_t> &o) const
-    {
-      size_type cnt = 0;
-
-      if (o.size() < size())
-      {
-        size_type start = 0;
-
-        while (start < size())
-        {
-          if ((start = find(o, start)) != size())
-            cnt++;
-
-          start++;
-        }
-      }
-
-      return cnt;
-    }
-
-    template <typename ochar_t>
-    constexpr iterator assign(const chars_span<ochar_t> &o)
-    {
-      iterator b = begin();
-      iterator e = end();
-
-      if (o.size() <= size())
-      {
-        const_iterator ob = o.cbegin();
-        const_iterator oe = o.cend();
-
-        while (b != e and ob != oe)
-          *(b++) = *(ob++);
-      }
-
-      return b;
-    }
-
-    template <int n>
-    constexpr iterator assign(const value_type (&s)[n])
-    {
-      return assign(chars_span<const value_type>(s, n - 1));
-    }
+    type_t *b;
+    type_t *e;
   };
+
+  template <typename type_t>
+  span<const type_t> init_span(const type_t *b, const type_t *e)
+  {
+    return {b, e};
+  }
+
+  template <typename type_t>
+  span<type_t> init_span(type_t *b, type_t *e)
+  {
+    return {b, e};
+  }
+
+  template <typename type_t, unsigned nb>
+  span<const type_t> init_span(const type_t (&sa)[nb])
+  {
+    return init_span(sa, sa + nb);
+  }
+
+  template <typename type_t, unsigned nb>
+  span<const type_t> init_cspan(const type_t (&sa)[nb])
+  {
+    return init_span(sa, sa + nb - 1);
+  }
+
+  template <typename type_t>
+  type_t *begin(span<type_t> &spa)
+  {
+    return spa.b;
+  }
+
+  template <typename type_t>
+  type_t *end(span<type_t> &spa)
+  {
+    return spa.e;
+  }
+
+  template <typename type_t>
+  const type_t *begin(const span<type_t> &spa)
+  {
+    return spa.b;
+  }
+
+  template <typename type_t>
+  const type_t *end(const span<type_t> &spa)
+  {
+    return spa.e;
+  }
+
+  template <typename type_t>
+  const unsigned size(const span<type_t> &spa)
+  {
+    return spa.e - spa.b;
+  }
+
+  template <typename type_t>
+  span<type_t> subspan(span<type_t> &s, unsigned start, unsigned sz)
+  {
+    auto b = start <= size(s) ? begin(s) + start : end(s);
+    auto e = start + sz <= size(s) ? b + sz : end(s);
+    return init_span(b, e);
+  }
+
+  template <typename type_t>
+  const span<type_t> subspan(const span<type_t> &s, unsigned start, unsigned sz)
+  {
+    auto b = start <= size(s) ? begin(s) + start : end(s);
+    auto e = start + sz <= size(s) ? b + sz : end(s);
+    return init_span(b, e);
+  }
+
+  template <typename cont_t>
+  const bool equals(
+      const cont_t &c1,
+      const cont_t &c2)
+  {
+    auto b1 = begin(c1), e1 = end(c1);
+    auto b2 = begin(c2), e2 = end(c2);
+
+    while (b1 != e1 and b2 != e2 and *b1 == *b2)
+    {
+      ++b1;
+      ++b2;
+    }
+
+    return b1 == e1 and b2 == e2;
+  }
+
+  template <typename type_t, typename otype_t>
+  unsigned find(const span<type_t> &s, const span<otype_t> &o, unsigned start = 0)
+  {
+    unsigned os = size(o);
+    unsigned ss = size(s);
+
+    if (os == 0)
+      return ss;
+
+    if (ss >= os)
+    {
+      unsigned index = start;
+
+      while (index < ss)
+      {
+        std::cout << index;
+        auto &&sub = subspan(s, index, os);
+        for (auto &&c : sub)
+          std::cout << c;
+        std::cout << std::endl;
+        if (equals(sub, o))
+          return index;
+
+        ++index;
+      }
+    }
+
+    return ss;
+  }
 } // namespace clon::fmt
 
 namespace clon::fmt
 {
-
-  template <int n, typename char_t>
-  struct chars_spans
+  template <typename char_t>
+  struct pattern
   {
-    chars_span<char_t> data[n];
+    span<chart_t> data;
   };
 
+  template <typename char_t, unsigned n>
+  pattern<const char_t> init_pattern(const char_t (&p)[n])
+  {
+    return {init_cspan(s)};
+  }
+
+  template <unsigned n, typename char_t>
+  array<span<char_t>, n> decompose(const pattern<char_t> &p)
+  {
+    array<span<char_t>, n + 1> inters;
+    span<const char> &&bra = init_cspan("{}");
+    length_t start = 0;
+    length_t nb = 0;
+
+    for (span<char_t>& sp : inters)
+    {
+      length_t found = find(_pat, bra, start);
+
+      auto b = begin(p.data) + start;
+      auto e = begin(p.data) + found;
+      sp = init_span(b, e);
+
+      if (found < _pat.size())
+        start = found + brackets.size();
+    }
+  }
+} // namespace clon::fmt
+
+namespace clon::fmt
+{
   template <typename char_t, int narg>
   struct pattern
   {
   private:
-    chars_span<char_t> _pat;
-    chars_spans<narg + 1, char_t> _inters;
+    span<char_t> _pat;
+    array<span<char_t>, narg + 1> _inters;
 
   public:
     explicit pattern(chars_span<char_t> s)
@@ -448,7 +449,7 @@ namespace clon::fmt
     using char_t = typename buffer::value_type;
     using pattern_t = pattern<const pchar_t, sizeof...(ft)>;
 
-    array<length_t, sizeof...(ft)> &&lens = init({f.length()...});
+    array<length_t, sizeof...(ft)> &&lens = init_array({f.length()...});
     buffer &&buf = reserve<buffer>(lens.sum());
     chars_span<char_t> cspan(&*buf.begin(), buf.size());
     pattern_t patt(chars_span<const pchar_t>(p, pn));
