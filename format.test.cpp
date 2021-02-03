@@ -10,19 +10,11 @@ int main()
 {
   namespace fmt = clon::fmt;
   using namespace fmt;
+  std::string_view hello = "hello";
+  std::string_view world = "world";
+  std::cout << format_to<std::string>("{} {}!", str(hello), str(world));
 
-  auto &&src = init_cspan("cou{}hqlskdj{}ddds{}qsldj{}qsldj{}");
-  auto &&sep = init_cspan("{}");
-  for (auto &&item : split_n<12>(src, sep))
-  {
-    std::cout << '"';
-    for (auto &&c : item)
-    {
-      std::cout << c;
-    }
-    std::cout << '"';
-    std::cout << '\n';
-  }
+
   //std::cout << format<std::string>("{}{}{} \n", str("coucou"), idec(10302890), bl(false));
   //std::cout << format<std::string>(str("coucou"), idec(10302890), bl(false), str("\n"));
 

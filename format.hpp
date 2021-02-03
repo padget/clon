@@ -18,7 +18,7 @@ namespace clon::fmt
 
   public:
     template <typename... args>
-    type_t &get(args &&... arg) const
+    type_t &get(args &&...arg) const
     {
       if (not initialized)
       {
@@ -133,6 +133,24 @@ namespace clon::fmt
       t = sa[i++];
 
     return arr;
+  }
+
+  template <typename type_t, unsigned n>
+  type_t &at(array<type_t, n> &a, unsigned i)
+  {
+    return a.data[i];
+  }
+
+  template <typename type_t, unsigned n>
+  type_t &&at(array<type_t, n> &&a, unsigned i)
+  {
+    return a.data[i];
+  }
+
+  template <typename type_t, unsigned n>
+  const type_t &at(const array<type_t, n> &a, unsigned i)
+  {
+    return a.data[i];
   }
 
   template <typename type_t, unsigned nb>
@@ -328,63 +346,6 @@ namespace clon::fmt
   }
 } // namespace clon::fmt
 
-/*
-namespace clon::fmt
-{
-  template <typename type_t>
-  concept with_length = requires(const type_t &t)
-  {
-    t.length();
-  };
-
-  template <typename type_t>
-  concept reservable = requires(type_t &t, length_t len)
-  {
-    t.reserve(len);
-  };
-
-  template <reservable buffer>
-  buffer reserve(length_t len)
-  {
-    buffer buf;
-    buf.reserve(len);
-
-    while (buf.size() < len)
-      buf.push_back('o');
-
-    return buf;
-  }
-
-  template <typename pchar_t, typename char_t, typename... ft>
-  void format_to(
-      const pattern<pchar_t, sizeof...(ft)> &p,
-      chars_span<char_t> cspan,
-      const ft &... f)
-  {
-    auto b = cspan.begin();
-
-    ((f.format_to(chars_span<char_t>(b, f.length())), b += f.length()), ...);
-  }
-
-  template <
-      reservable buffer,
-      typename pchar_t,
-      int pn,
-      with_length... ft>
-  buffer format(const pchar_t (&p)[pn], const ft &... f)
-  {
-    using char_t = typename buffer::value_type;
-    using pattern_t = pattern<const pchar_t, sizeof...(ft)>;
-
-    array<length_t, sizeof...(ft)> &&lens = init_array({f.length()...});
-    buffer &&buf = reserve<buffer>(lens.sum());
-    chars_span<char_t> cspan(&*buf.begin(), buf.size());
-    pattern_t patt(chars_span<const pchar_t>(p, pn));
-    format_to(patt, cspan, f...);
-    return buf;
-  }
-} // namespace clon::fmt
-
 namespace clon::fmt
 {
   template <
@@ -396,15 +357,15 @@ namespace clon::fmt
     const type_t *t;
     once<length_t, lengther_t> len;
 
-    constexpr length_t length() const
+    length_t length() const
     {
       return len.get(*t);
     }
 
     template <typename char_t>
-    constexpr void format_to(chars_span<char_t> cspan) const
+    void format_to(span<char_t> &buff_part) const
     {
-      converter_t{}(*t, cspan);
+      converter_t{}(*t, buff_part);
     }
   };
 
@@ -417,6 +378,106 @@ namespace clon::fmt
   {
     return {&t};
   }
+
+  template <typename buffer_t>
+  buffer_t reserve(unsigned len)
+  {
+    buffer_t buf;
+    buf.reserve(len);
+
+    while (buf.size() < len)
+      buf.push_back('-');
+
+    return buf;
+  }
+
+  template <
+      typename bchar_t,
+      typename fchar_t,
+      typename... fts>
+  array<span<bchar_t>, sizeof...(fts) * 2 + 1>
+  prepare_buffering(
+      span<bchar_t> &buff,
+      const array<span<fchar_t>, sizeof...(fts) + 1> &fmt_parts,
+      const fts &...f)
+  {
+    return {};
+  }
+
+  unsigned sum_sizes(const auto &fmt_parts)
+  {
+    unsigned sum = 0;
+    for (const auto &part : fmt_parts)
+      sum += size(part);
+    return sum;
+  }
+
+  template <
+      typename bchar_t,
+      typename fchar_t>
+  void insert_to(
+      span<bchar_t> &buff_part,
+      const span<fchar_t> &fmt_part)
+  {
+    auto bb = begin(buff_part), be = end(buff_part);
+    auto fb = begin(fmt_part), fe = end(fmt_part);
+
+    while (bb != be and fb != fe)
+      *bb = *fb;
+  }
+
+  template <
+      typename bchar_t,
+      typename type_t,
+      typename lengther_t,
+      typename converter_t>
+  void insert_to(
+      span<bchar_t> &buff_part,
+      const formatter<type_t, lengther_t, converter_t> &f)
+  {
+    f.format_to(buff_part);
+  }
+
+  template <
+      typename buffer_t,
+      typename fchar_t,
+      typename... fts>
+  buffer_t format_to(
+      const span<fchar_t> &fmt,
+      const fts &...f)
+  {
+    auto sep_span = init_cspan("{}");
+    auto fmt_parts = split_n<sizeof...(fts) + 1>(fmt, sep_span);
+    auto buff = reserve<buffer_t>((f.length() + ... + sum_sizes(fmt_parts)));
+    auto buff_span = init_span(&*buff.begin(), &*buff.end());
+    auto buff_parts = prepare_buffering(buff_span, fmt_parts, f...);
+    std::cout << buff.size() << std::endl;
+    for (unsigned i = 0; i < size(fmt_parts); ++i)
+      insert_to(at(buff_parts, i * 2), at(fmt_parts, i * 2));
+
+    unsigned i = 0;
+    ((insert_to(at(buff_parts, i * 2 + 1), f), i += 2), ...);
+
+    return buff;
+  }
+
+  template <
+      typename buffer_t,
+      typename fchar_t,
+      unsigned n,
+      typename... fts>
+  buffer_t format_to(
+      const fchar_t (&fmt)[n],
+      const fts &...f)
+  {
+    return format_to<buffer_t>(init_span(fmt), f...);
+  }
+
+} // namespace clon::fmt
+
+namespace clon::fmt
+{
+
 } // namespace clon::fmt
 
 namespace clon::fmt
@@ -436,7 +497,7 @@ namespace clon::fmt
     template <typename char_t, int n>
     constexpr void operator()(
         const char_t (&s)[n],
-        chars_span<char_t> &buf) const
+        span<char_t> &buf) const
     {
       buf.assign(s);
     }
@@ -465,9 +526,13 @@ namespace clon::fmt
     template <typename str_t, typename char_t>
     void operator()(
         const str_t &s,
-        chars_span<char_t> &buf)
+        span<char_t> &buf)
     {
-      buf.assign(chars_span<const char_t>(s.data(), s.size()));
+      auto bb = begin(buf), be = end(buf);
+      auto sb = begin(s), se = end(s);
+
+      while (bb != be and sb != se)
+        *bb = *sb;
     }
   };
 
@@ -505,7 +570,7 @@ namespace clon::fmt
     template <typename integral_t, typename char_t>
     constexpr void operator()(
         const integral_t &i,
-        chars_span<char_t> &buf) const
+        span<char_t> &buf) const
     {
       constexpr auto digits = "0123456789";
       constexpr unsigned base = 10;
@@ -543,7 +608,7 @@ namespace clon::fmt
     template <typename char_t>
     constexpr void operator()(
         const bool &b,
-        chars_span<char_t> &buf) const
+        span<char_t> &buf) const
     {
       if (b)
         buf.assign("true");
@@ -561,5 +626,5 @@ namespace clon::fmt
   }
 
 } // namespace clon::fmt
-*/
+
 #endif
