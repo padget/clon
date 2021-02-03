@@ -11,23 +11,18 @@ int main()
   namespace fmt = clon::fmt;
   using namespace fmt;
 
-  pattern<const char> p = init_pattern("cou{}hqlskdj{}ddds{}qsldj{}qsldj{}");
- 
-  for (int i = 0; i < 6; i++)
+  auto &&src = init_cspan("cou{}hqlskdj{}ddds{}qsldj{}qsldj{}");
+  auto &&sep = init_cspan("{}");
+  for (auto &&item : split_n<12>(src, sep))
   {
     std::cout << '"';
-    for (unsigned j = 0; j < p.spans().data[i].size(); j++)
-      std::cout << p.spans().data[i][j];
-    std::cout << '"' << std::endl;
+    for (auto &&c : item)
+    {
+      std::cout << c;
+    }
+    std::cout << '"';
+    std::cout << '\n';
   }
-
-  std::cout << p.size() << std::endl;
-  span<const char> s = init_cspan("coucou");
-  span<const char> s2 = init_cspan("ou");
-  std::cout  << find(s, s2);
-
-
-
   //std::cout << format<std::string>("{}{}{} \n", str("coucou"), idec(10302890), bl(false));
   //std::cout << format<std::string>(str("coucou"), idec(10302890), bl(false), str("\n"));
 

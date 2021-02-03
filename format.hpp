@@ -273,8 +273,13 @@ namespace clon::fmt
     return b1 == e1 and b2 == e2;
   }
 
-  template <typename type_t, typename otype_t>
-  unsigned find(const span<type_t> &s, const span<otype_t> &o, unsigned start = 0)
+  template <
+      typename type_t,
+      typename otype_t>
+  unsigned find(
+      const span<type_t> &s,
+      const span<otype_t> &o,
+      unsigned start = 0)
   {
     unsigned os = size(o);
     unsigned ss = size(s);
@@ -288,11 +293,8 @@ namespace clon::fmt
 
       while (index < ss)
       {
-        std::cout << index;
         auto &&sub = subspan(s, index, os);
-        for (auto &&c : sub)
-          std::cout << c;
-        std::cout << std::endl;
+
         if (equals(sub, o))
           return index;
 
@@ -302,106 +304,31 @@ namespace clon::fmt
 
     return ss;
   }
-} // namespace clon::fmt
 
-namespace clon::fmt
-{
-  template <typename char_t>
-  struct pattern
+  template <unsigned n, typename type_t, typename otype_t>
+  array<span<type_t>, n> split_n(const span<type_t> &src, const span<otype_t> &sep)
   {
-    span<chart_t> data;
-  };
+    array<span<type_t>, n> splitted;
+    const auto src_begin = begin(src);
+    const auto src_size = size(src);
+    const auto sep_size = size(sep);
+    unsigned start = 0u;
 
-  template <typename char_t, unsigned n>
-  pattern<const char_t> init_pattern(const char_t (&p)[n])
-  {
-    return {init_cspan(s)};
-  }
-
-  template <unsigned n, typename char_t>
-  array<span<char_t>, n> decompose(const pattern<char_t> &p)
-  {
-    array<span<char_t>, n + 1> inters;
-    span<const char> &&bra = init_cspan("{}");
-    length_t start = 0;
-    length_t nb = 0;
-
-    for (span<char_t>& sp : inters)
+    for (span<type_t> &s : splitted)
     {
-      length_t found = find(_pat, bra, start);
+      unsigned found = find(src, sep, start);
+      s.b = src_begin + start;
+      s.e = src_begin + found;
 
-      auto b = begin(p.data) + start;
-      auto e = begin(p.data) + found;
-      sp = init_span(b, e);
-
-      if (found < _pat.size())
-        start = found + brackets.size();
+      if (found < src_size)
+        start = found + sep_size;
     }
+
+    return splitted;
   }
 } // namespace clon::fmt
 
-namespace clon::fmt
-{
-  template <typename char_t, int narg>
-  struct pattern
-  {
-  private:
-    span<char_t> _pat;
-    array<span<char_t>, narg + 1> _inters;
-
-  public:
-    explicit pattern(chars_span<char_t> s)
-        : _pat(s)
-    {
-      static_assert(narg > 0);
-      decompose();
-    }
-
-    template <int n>
-    explicit pattern(char_t (&s)[n])
-        : pattern(chars_span(s, n)) {}
-
-  public:
-    const length_t size() const
-    {
-      length_t sum = 0;
-
-      for (int i = 0; i < narg + 1; i++)
-        sum += _inters.data[i].size();
-
-      return sum;
-    }
-
-    const chars_spans<narg + 1, char_t> &
-    spans() const
-    {
-      return _inters;
-    }
-
-  private:
-    void decompose()
-    {
-      constexpr chars_span<const char_t> brackets("{}");
-      length_t start = 0;
-      length_t nb = 0;
-
-      while (nb < narg + 1)
-      {
-        length_t found = _pat.find(brackets, start);
-
-        auto b = _pat.begin() + start;
-        auto e = _pat.begin() + found;
-        _inters.data[nb] = chars_span<char_t>(b, e);
-
-        if (found < _pat.size())
-          start = found + brackets.size();
-
-        ++nb;
-      }
-    }
-  };
-} // namespace clon::fmt
-
+/*
 namespace clon::fmt
 {
   template <typename type_t>
@@ -634,5 +561,5 @@ namespace clon::fmt
   }
 
 } // namespace clon::fmt
-
+*/
 #endif
