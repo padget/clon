@@ -65,6 +65,17 @@
     "bitset": "cpp",
     "complex": "cpp",
     "set": "cpp",
-    "typeindex": "cpp"
+    "typeindex": "cpp",
+    "span": "cpp",
+    "cassert": "cpp",
+    "cerrno": "cpp",
+    "cfloat": "cpp",
+    "ciso646": "cpp",
+    "climits": "cpp",
+    "filesystem": "cpp",
+    "ios": "cpp",
+    "locale": "cpp",
+    "queue": "cpp",
+    "stack": "cpp"
   }
 }
