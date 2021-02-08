@@ -11,7 +11,6 @@
 
 namespace clon::fmt
 {
-
   template <typename type_t, typename function_t>
   class once
   {
@@ -146,6 +145,7 @@ namespace clon::fmt
     template <typename char_t, typename... args_t>
     buffer<char_t> format(view<char_t> fmt, const args_t &...args)
     {
+      // TODO 00001 : see to factorize this with  00002
       constexpr std::size_t nb_args = sizeof...(args_t);
       constexpr view<char_t> sep = "{}";
 
@@ -180,19 +180,109 @@ namespace clon::fmt
 
       return buff;
     }
+
+    template <typename char_t, typename... args_t>
+    std::size_t predict_length_of(
+        std::basic_string_view<char_t> fmt,
+        const args_t &...args)
+    {
+      // TODO 00002 : see to factorize this with 00001
+      constexpr std::size_t nb_args = sizeof...(args_t);
+      constexpr view<char_t> sep = "{}";
+      views<char_t, nb_args + 1> fmt_parts = split_n<nb_args + 1>(fmt, sep);
+
+      sizes<nb_args + 1> fs = fmt_sizes(fmt_parts);
+      sizes<nb_args> ts = {length_of(args)...};
+
+      std::size_t fts = std::accumulate(fs.begin(), fs.end(), 0);
+      std::size_t tts = std::accumulate(ts.begin(), ts.end(), 0);
+      return fts + tts;
+    }
+
+    template <typename char_t, typename... args_t>
+    void format_into(
+        formatter_context<char_t> &ctx,
+        view<char_t> fmt,
+        const args_t &...args)
+    {
+      // TODO 00003 : see to factorize this with 00002 and 00001
+      constexpr std::size_t nb_args = sizeof...(args_t);
+      constexpr view<char_t> sep = "{}";
+      views<char_t, nb_args + 1> fmt_parts = split_n<nb_args + 1>(fmt, sep);
+
+      sizes<nb_args + 1> fs = fmt_sizes(fmt_parts);
+      sizes<nb_args> ts = {length_of(args)...};
+
+      std::size_t i(0);
+      std::size_t offset(0);
+      formatter_context<char_t> subctx;
+
+      ((
+           subctx.data = ctx.data + offset, subctx.len = fs[i],
+           format_of(subctx, fmt_parts.at(i)),
+           offset += fs[i],
+           subctx.data = ctx.data + offset, subctx.len = ts[i],
+           format_of(subctx, args),
+           offset += ts[i],
+           i++),
+       ...);
+
+      subctx.data = ctx.data + offset;
+      subctx.len = fs[i];
+      format_of(subctx, fmt_parts[i]);
+    }
   } // namespace detail
 
   template <typename... args_t>
-  buffer<char> format(std::basic_string_view<char> fmt, const args_t &...args)
+  buffer<char> format(
+      std::basic_string_view<char> fmt,
+      const args_t &...args)
   {
     return detail::format(fmt, args...);
   }
 
   template <typename... args_t>
-  buffer<wchar_t> format(std::basic_string_view<wchar_t> fmt, const args_t &...args)
+  buffer<wchar_t> format(
+      std::basic_string_view<wchar_t> fmt,
+      const args_t &...args)
   {
     return detail::format(fmt, args...);
   }
+
+  template <typename... args_t>
+  std::size_t predict_length_of(
+      std::basic_string_view<char> fmt,
+      const args_t &...args)
+  {
+    return detail::predict_length_of(fmt, args...);
+  }
+
+  template <typename... args_t>
+  std::size_t predict_length_of(
+      std::basic_string_view<wchar_t> fmt,
+      const args_t &...args)
+  {
+    return detail::predict_length_of(fmt, args...);
+  }
+
+  template <typename... args_t>
+  void format_into(
+      formatter_context<char> &ctx,
+      std::basic_string_view<char> fmt,
+      const args_t &...args)
+  {
+    detail::format_into(ctx, fmt, args...);
+  }
+
+  template <typename... args_t>
+  void format_into(
+      formatter_context<wchar_t> &ctx,
+      std::basic_string_view<wchar_t> fmt,
+      const args_t &...args)
+  {
+    detail::format_into(ctx, fmt, args...);
+  }
+
 } // namespace clon::fmt
 
 #endif
