@@ -200,6 +200,7 @@ all: version
 format.out: format.test.cpp format.hpp
 	${CC} -o $@  $< ${LIBS} ${FLAGS}
 	./$@
+	@rm -f format.out
 
 format: format.out
 

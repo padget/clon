@@ -35,7 +35,6 @@ namespace clon::fmt
 
 namespace clon::fmt
 {
-
   template <typename char_t>
   using view = std::basic_string_view<char_t>;
 
@@ -49,17 +48,75 @@ namespace clon::fmt
   using buffer = std::basic_string<char_t>;
 
   template <typename char_t>
-  struct formatter_context
+  class formatter_context
   {
-    char_t *data;
-    std::size_t len;
+  private:
+    buffer<char_t> &buff;
 
-    formatter_context<char_t>
-    subcontext(std::size_t offset, std::size_t len)
+  public:
+    explicit formatter_context(buffer<char_t> &_buff) : buff(_buff) {}
+
+  public:
+    void append(const char_t &c)
     {
-      return {data + offset, len};
+      buff.push_back(c);
+    }
+
+    auto end()
+    {
+      return buff.end();
     }
   };
+
+  template <typename char_t, std::size_t n>
+  struct pattern
+  {
+  private:
+    view<char_t> fmt;
+    view<char_t> sep;
+    std::size_t _parts_size = 0;
+    views<char_t, n> _parts;
+  public:
+    explicit pattern(view<char_t> _fmt, view<char_t> _sep)
+        : fmt(_fmt), sep(_sep)
+    {
+      auto bf = fmt.begin(), ef = fmt.end();
+      auto bs = sep.begin(), es = sep.end();
+
+      for (view<char_t> &part : _parts)
+      {
+        auto found = std::search(bf, ef, bs, es);
+        part = view<char_t>(bf, found);
+
+        if (found != ef)
+          bf = (found + sep.size());
+
+        _parts_size += part.size();
+      }
+    }
+
+  public:
+    const std::size_t &parts_size() const
+    {
+      return _parts_size;
+    }
+
+    std::size_t full_size() const
+    {
+      return fmt.size();
+    }
+
+    const views<char_t, n> &parts() const
+    {
+      return _parts;
+    }
+  };
+
+  template <typename char_t, std::size_t n>
+  std::size_t length_of(const pattern<char_t, n> &p)
+  {
+    return p.parts_size();
+  }
 
   template <typename char_t>
   std::size_t length_of(const view<char_t> &v)
@@ -72,10 +129,8 @@ namespace clon::fmt
       formatter_context<char_t> &ctx,
       const view<char_t> &v)
   {
-    unsigned i(0);
-
     for (const char_t &c : v)
-      ctx.data[i++] = c;
+      ctx.append(c);
   }
 
   template <std::integral integral_t>
@@ -99,104 +154,63 @@ namespace clon::fmt
       formatter_context<char_t> &ctx,
       const integral_t &t)
   {
-    integral_t tmp = t;
-    char_t *rb = ctx.data + ctx.len - 1;
+    integral_t tmp(t);
+    std::size_t cnt(0);
 
     while (tmp != 0)
     {
-      *(rb--) = "0123456789"[tmp % 10];
+      ctx.append("0123456789"[tmp % 10]);
       tmp = tmp / 10;
+      cnt++;
     }
+
+    std::reverse(ctx.end() - cnt, ctx.end());
   }
 
-  namespace detail
+  template <typename first_t, typename second_t, typename... tails_t>
+  std::size_t length_of(const first_t &f, const second_t &s, const tails_t &...t)
   {
-    template <std::size_t n, typename char_t>
-    views<char_t, n> split_n(view<char_t> fmt, view<char_t> sep)
+    return length_of(f) + (length_of(s) + ... + length_of(t));
+  }
+
+  template <typename char_t, std::size_t n>
+  struct formatter
+  {
+    constexpr static view<char_t> sep = "{}";
+    pattern<char_t, n + 1> p;
+
+  public:
+    explicit formatter(view<char_t> fmt) : p(fmt, sep) {}
+
+  public:
+    template <typename... args_t>
+    buffer<char_t> format(const args_t &...args)
     {
-      views<char_t, n> parts;
+      static_assert(sizeof...(args_t) == n);
 
-      auto bf = fmt.begin(), ef = fmt.end();
-      auto bs = sep.begin(), es = sep.end();
+      buffer<char_t> buff;
+      buff.reserve(length_of(p, args...));
 
-      for (view<char_t> &part : parts)
-      {
-        auto found = std::search(bf, ef, bs, es);
-        part = view<char_t>(bf, found);
-
-        if (found != ef)
-          bf = (found + sep.size());
-      }
-
-      return parts;
-    }
-
-    template <typename char_t, std::size_t n>
-    sizes<n> fmt_sizes(const views<char_t, n> &fmt_parts)
-    {
-      sizes<n> ss;
-
-      for (std::size_t i(0); i < n; ++i)
-        ss[i] = fmt_parts[i].size();
-
-      return ss;
-    }
-
-    template <typename char_t, typename... args_t>
-    buffer<char_t> format(view<char_t> fmt, const args_t &...args)
-    {
-      // TODO 00001 : see to factorize this with  00002
-      constexpr std::size_t nb_args = sizeof...(args_t);
-      constexpr view<char_t> sep = "{}";
-
-      views<char_t, nb_args + 1> fmt_parts = split_n<nb_args + 1>(fmt, sep);
-
-      sizes<nb_args + 1> fs = fmt_sizes(fmt_parts);
-      sizes<nb_args> ts = {length_of(args)...};
-
-      std::size_t fts = std::accumulate(fs.begin(), fs.end(), 0);
-      std::size_t tts = std::accumulate(ts.begin(), ts.end(), 0);
-      std::size_t buff_len = fts + tts;
-
-      buffer<char_t> buff(buff_len, (char_t)0);
-      char_t *data(buff.data());
+      formatter_context<char_t> ctx{buff};
       std::size_t i(0);
-      std::size_t offset(0);
-      formatter_context<char_t> ctx;
-
-      ((
-           ctx.data = data + offset, ctx.len = fs[i],
-           format_of(ctx, fmt_parts.at(i)),
-           offset += fs[i],
-           ctx.data = data + offset, ctx.len = ts[i],
-           format_of(ctx, args),
-           offset += ts[i],
-           i++),
-       ...);
-
-      ctx.data = data + offset;
-      ctx.len = fs[i];
-      format_of(ctx, fmt_parts[i]);
+      ((format_of(ctx, p.parts().at(i++)), format_of(ctx, args)), ...);
+      format_of(ctx, p.parts().at(i));
 
       return buff;
     }
+  };
 
+  namespace detail
+  {
     template <typename char_t, typename... args_t>
     std::size_t predict_length_of(
         std::basic_string_view<char_t> fmt,
         const args_t &...args)
     {
-      // TODO 00002 : see to factorize this with 00001
       constexpr std::size_t nb_args = sizeof...(args_t);
       constexpr view<char_t> sep = "{}";
-      views<char_t, nb_args + 1> fmt_parts = split_n<nb_args + 1>(fmt, sep);
-
-      sizes<nb_args + 1> fs = fmt_sizes(fmt_parts);
-      sizes<nb_args> ts = {length_of(args)...};
-
-      std::size_t fts = std::accumulate(fs.begin(), fs.end(), 0);
-      std::size_t tts = std::accumulate(ts.begin(), ts.end(), 0);
-      return fts + tts;
+      pattern<char_t, nb_args + 1> p(fmt, sep);
+      return length_of(p, args...);
     }
 
     template <typename char_t, typename... args_t>
@@ -205,31 +219,12 @@ namespace clon::fmt
         view<char_t> fmt,
         const args_t &...args)
     {
-      // TODO 00003 : see to factorize this with 00002 and 00001
       constexpr std::size_t nb_args = sizeof...(args_t);
       constexpr view<char_t> sep = "{}";
-      views<char_t, nb_args + 1> fmt_parts = split_n<nb_args + 1>(fmt, sep);
-
-      sizes<nb_args + 1> fs = fmt_sizes(fmt_parts);
-      sizes<nb_args> ts = {length_of(args)...};
-
+      pattern<char_t, nb_args + 1> p(fmt, sep);
       std::size_t i(0);
-      std::size_t offset(0);
-      formatter_context<char_t> subctx;
-
-      ((
-           subctx.data = ctx.data + offset, subctx.len = fs[i],
-           format_of(subctx, fmt_parts.at(i)),
-           offset += fs[i],
-           subctx.data = ctx.data + offset, subctx.len = ts[i],
-           format_of(subctx, args),
-           offset += ts[i],
-           i++),
-       ...);
-
-      subctx.data = ctx.data + offset;
-      subctx.len = fs[i];
-      format_of(subctx, fmt_parts[i]);
+      ((format_of(ctx, p.parts().at(i++)), format_of(ctx, args)), ...);
+      format_of(ctx, p.parts().at(i));
     }
   } // namespace detail
 
@@ -238,7 +233,8 @@ namespace clon::fmt
       std::basic_string_view<char> fmt,
       const args_t &...args)
   {
-    return detail::format(fmt, args...);
+    formatter<char, sizeof...(args_t)> f(fmt);
+    return f.format(args...);
   }
 
   template <typename... args_t>
@@ -246,7 +242,8 @@ namespace clon::fmt
       std::basic_string_view<wchar_t> fmt,
       const args_t &...args)
   {
-    return detail::format(fmt, args...);
+    formatter<wchar_t, sizeof...(args_t)> f(fmt);
+    return f.format(args...);
   }
 
   template <typename... args_t>
