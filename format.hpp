@@ -5,9 +5,11 @@
 
 #include <array>
 #include <string>
+#include <vector>
 #include <algorithm>
 #include <numeric>
 #include <string_view>
+#include <tuple>
 
 namespace clon::fmt
 {
@@ -17,11 +19,13 @@ namespace clon::fmt
   template <typename char_t, std::size_t n>
   using views = std::array<view<char_t>, n>;
 
-  template <std::size_t n>
-  using sizes = std::array<std::size_t, n>;
-
   template <typename char_t>
   using buffer = std::basic_string<char_t>;
+
+  template <typename char_t>
+  concept charable =
+      std::same_as<char_t, char> or
+      std::same_as<char_t, wchar_t>;
 
   template <typename char_t>
   class formatter_context
@@ -59,6 +63,34 @@ namespace clon::fmt
       ctx.append(c);
   }
 
+  template <std::size_t n>
+  std::size_t length_of(const char (&s)[n])
+  {
+    return n - 1;
+  }
+
+  template <std::size_t n>
+  std::size_t length_of(const wchar_t (&s)[n])
+  {
+    return n - 1;
+  }
+
+  template <std::size_t n>
+  void format_of(
+      formatter_context<char> &ctx,
+      const char (&s)[n])
+  {
+    format_of(ctx, view<char>(s));
+  }
+
+  template <std::size_t n>
+  void format_of(
+      formatter_context<wchar_t> &ctx,
+      const wchar_t (&s)[n])
+  {
+    format_of(ctx, view<wchar_t>(s));
+  }
+
   template <std::integral integral_t>
   std::size_t length_of(const integral_t &i)
   {
@@ -93,20 +125,48 @@ namespace clon::fmt
     std::reverse(ctx.end() - cnt, ctx.end());
   }
 
+  template <typename char_t>
+  std::size_t length_of(const std::basic_string<char_t> &s)
+  {
+    return length_of(std::basic_string_view<char_t>(s.begin(), s.end()));
+  }
+
+  template <typename char_t>
+  void format_of(
+      formatter_context<char_t> &ctx,
+      const std::basic_string<char_t> &v)
+  {
+    format_of(ctx, std::basic_string_view<char_t>(v.begin(), v.end()));
+  }
+
+  template <charable char_t>
+  std::size_t length_of(const std::vector<char_t> &v)
+  {
+    return length_of(std::basic_string_view<char_t>(v.begin(), v.end()));
+  }
+
+  template <charable char_t>
+  void format_of(
+      formatter_context<char_t> &ctx,
+      const std::vector<char_t> &v)
+  {
+    format_of(ctx, std::basic_string_view<char_t>(v.begin(), v.end()));
+  }
+
   template <typename type_t>
   class basic_format
   {
-    const type_t *data = nullptr;
+    const type_t &data;
     mutable std::size_t len = 0;
 
   public:
     explicit basic_format(const type_t &_data)
-        : data(&_data) {}
+        : data(_data) {}
 
     const std::size_t &length() const
     {
       if (len == 0)
-        len = length_of(*data);
+        len = length_of(data);
 
       return len;
     }
@@ -114,7 +174,7 @@ namespace clon::fmt
     template <typename char_t>
     void format_into(formatter_context<char_t> &ctx) const
     {
-      format_of(ctx, *data);
+      format_of(ctx, data);
     }
   };
 
@@ -175,109 +235,122 @@ namespace clon::fmt
     return p.parts_size();
   }
 
-  template <typename char_t, std::size_t n>
+  template <typename... args_t>
+  using basics = std::tuple<basic_format<args_t>...>;
+
+  template <typename char_t, typename... args_t>
   class partial_formatter
   {
     constexpr static view<char_t> sep = "{}";
-    pattern<char_t, n + 1> p;
+    pattern<char_t, sizeof...(args_t) + 1> p;
+    basics<args_t...> bcs;
 
   public:
-    explicit partial_formatter(view<char_t> fmt) : p(fmt, sep) {}
+    explicit partial_formatter(view<char_t> fmt, const args_t &...args)
+        : p(fmt, sep), bcs(make_format(args)...) {}
 
   public:
-    template <typename... args_t>
-    const std::size_t length(const basic_format<args_t> &...args) const
+    const std::size_t length() const
     {
-      return (args.length() + ... + p.parts_size());
+      constexpr auto sum = [](auto &&...a) { return (a.length() + ... + 0); };
+      return p.parts_size() + std::apply(sum, bcs);
     }
 
-    template <typename... args_t>
-    void format(formatter_context<char_t> &ctx, const basic_format<args_t> &...args) const
+    void format(formatter_context<char_t> &ctx) const
     {
-      std::size_t i(0);
-      ((make_format(p.parts().at(i++)).format_into(ctx), args.format_into(ctx)), ...);
-      make_format(p.parts().at(i)).format_into(ctx);
+      std::apply([&parts = p.parts(), &ctx](auto &&...args) {
+        std::size_t i(0);
+        ((make_format(parts.at(i++)).format_into(ctx), args.format_into(ctx)), ...);
+        make_format(parts.at(i)).format_into(ctx);
+      },
+                 bcs);
     }
   };
 
-  template <typename char_t, std::size_t n>
+  template <typename char_t, typename... args_t>
+  partial_formatter<char_t, args_t...> make_partial(
+      view<char_t> fmt, const args_t &...args)
+  {
+    return partial_formatter<char_t, args_t...>(fmt, args...);
+  }
+
+  template <typename char_t, typename... args_t>
   class formatter
   {
-    partial_formatter<char_t, n> partial;
+    partial_formatter<char_t, args_t...> partial;
 
   public:
-    explicit formatter(view<char_t> fmt) : partial(fmt) {}
+    explicit formatter(view<char_t> fmt, const args_t &...args) : partial(fmt, args...) {}
 
   public:
-    template <typename... args_t>
-    buffer<char_t> format(const basic_format<args_t> &...args)
+    buffer<char_t> format()
     {
-      static_assert(sizeof...(args_t) == n);
-
       buffer<char_t> buff;
-      buff.reserve(partial.length(args...));
+      buff.reserve(partial.length());
 
       formatter_context<char_t> ctx{buff};
-      partial.format(ctx, args...);
+      partial.format(ctx);
 
       return buff;
     }
   };
 
+  template <typename char_t, typename... args_t>
+  formatter<char_t, args_t...> make_formatter(
+      view<char_t> fmt, const args_t &...args)
+  {
+    return formatter<char_t, args_t...>(fmt, args...);
+  }
+
+  template <typename char_t>
+  std::basic_string<char_t>
+  to_string(buffer<char_t> &&b)
+  {
+    return std::basic_string(b.data(), b.size());
+  }
+
   template <typename... args_t>
   buffer<char> format(
-      std::basic_string_view<char> fmt,
-      const args_t &...args)
+      view<char> fmt, const args_t &...args)
   {
-    formatter<char, sizeof...(args_t)> f(fmt);
-    return f.format(make_format(args)...);
+    return make_formatter(fmt, args...).format();
   }
 
   template <typename... args_t>
   buffer<wchar_t> format(
-      std::basic_string_view<wchar_t> fmt,
-      const args_t &...args)
+      view<wchar_t> fmt, const args_t &...args)
   {
-    formatter<wchar_t, sizeof...(args_t)> f(fmt);
-    return f.format(make_format(args)...);
+    return make_formatter(fmt, args...).format();
   }
 
   template <typename... args_t>
   std::size_t predict_length_of(
-      std::basic_string_view<char> fmt,
-      const args_t &...args)
+      view<char> fmt, const args_t &...args)
   {
-    partial_formatter<char, sizeof...(args_t)> partial(fmt);
-    return partial.length(make_format(args)...);
+    return make_partial(fmt, args...).length();
   }
 
   template <typename... args_t>
   std::size_t predict_length_of(
-      std::basic_string_view<wchar_t> fmt,
-      const args_t &...args)
+      view<wchar_t> fmt, const args_t &...args)
   {
-    partial_formatter<wchar_t, sizeof...(args_t)> partial(fmt);
-    return partial.length(make_format(args)...);
+    return make_partial(fmt, args...).length();
   }
 
   template <typename... args_t>
   void format_into(
       formatter_context<char> &ctx,
-      std::basic_string_view<char> fmt,
-      const args_t &...args)
+      view<char> fmt, const args_t &...args)
   {
-    partial_formatter<char, sizeof...(args_t)> partial(fmt);
-    return partial.format(ctx, make_format(args)...);
+    make_partial(fmt, args...).format(ctx);
   }
 
   template <typename... args_t>
   void format_into(
       formatter_context<wchar_t> &ctx,
-      std::basic_string_view<wchar_t> fmt,
-      const args_t &...args)
+      view<wchar_t> fmt, const args_t &...args)
   {
-    partial_formatter<wchar_t, sizeof...(args_t)> partial(fmt);
-    return partial.format(ctx, make_format(args)...);
+    make_partial(fmt, args...).format(ctx);
   }
 
 } // namespace clon::fmt

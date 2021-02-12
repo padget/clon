@@ -25,7 +25,7 @@
 
 CC          := g++-10
 LIBS        := -lfmt
-FLAGS       := -std=c++20 -Wall -pedantic -Werror
+FLAGS       := -std=c++20 -Wall -pedantic -Werror -O3
 VERSION     := $(shell more clon.hpp | grep CLON_VERSION | grep -Po '[0-9]+\.[0-9]+\.[0-9]+')
 DIST_PREFIX := libclon
 DIST				:= $(DIST_PREFIX)-$(VERSION).zip
