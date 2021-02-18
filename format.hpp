@@ -94,6 +94,9 @@ namespace clon::fmt
   template <std::integral integral_t>
   std::size_t length_of(const integral_t &i)
   {
+    if (i == 0)
+      return 1;
+
     constexpr unsigned base(10);
     std::size_t len(0);
     integral_t tmp(i);
@@ -112,17 +115,22 @@ namespace clon::fmt
       formatter_context<char_t> &ctx,
       const integral_t &t)
   {
-    integral_t tmp(t);
-    std::size_t cnt(0);
-
-    while (tmp != 0)
+    if (t == 0)
+      ctx.append('0');
+    else
     {
-      ctx.append("0123456789"[tmp % 10]);
-      tmp = tmp / 10;
-      cnt++;
-    }
+      integral_t tmp(t);
+      std::size_t cnt(0);
 
-    std::reverse(ctx.end() - cnt, ctx.end());
+      while (tmp != 0)
+      {
+        ctx.append("0123456789"[tmp % 10]);
+        tmp = tmp / 10;
+        cnt++;
+      }
+
+      std::reverse(ctx.end() - cnt, ctx.end());
+    }
   }
 
   template <typename char_t>

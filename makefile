@@ -24,8 +24,8 @@
 ###########################################
 
 CC          := g++-10
-LIBS        := -lfmt
-FLAGS       := -std=c++20 -Wall -pedantic -Werror -O3
+LIBS        := 
+FLAGS       := -std=c++20 -Wall -pedantic -Werror -O3 -fconcepts-diagnostics-depth=4
 VERSION     := $(shell more clon.hpp | grep CLON_VERSION | grep -Po '[0-9]+\.[0-9]+\.[0-9]+')
 DIST_PREFIX := libclon
 DIST				:= $(DIST_PREFIX)-$(VERSION).zip
@@ -203,4 +203,11 @@ format.out: format.test.cpp format.hpp
 	@rm -f format.out
 
 format: format.out
+
+## FORMAT target. TODO merge with other targets
+clon-wrapped.out: clon-wrapped.test.cpp clon-wrapped.hpp
+	${CC} -o $@  $< ${LIBS} ${FLAGS}
+	./$@
+
+clon-wrapped: clon-wrapped.out
 

@@ -6,144 +6,160 @@
 #include <variant>
 #include <vector>
 #include <span>
+#include <limits>
+#include <array>
+#include <charconv>
+
+#include "format.hpp"
 
 namespace clon
 {
-  template <typename char_t>
-  using sview = std::basic_string_view<char_t>;
-
   enum struct clon_type : unsigned
   {
     none = 0,
     boolean = 1,
     number = 2,
     string = 3,
-    object = 4
+    list = 4
   };
 
   template <typename char_t>
   struct node;
 
-  template <typename char_t, typename type_t>
-  struct wrapper
+  struct list_tag
   {
-    sview<char_t> valv;
   };
 
   template <typename char_t>
-  using number = wrapper<char_t, double>;
-
-  template <typename char_t>
-  using string = wrapper<char_t, sview<char_t>>;
-
-  template <typename char_t>
-  using boolean = wrapper<char_t, bool>;
-
-  template <typename char_t>
-  using object = wrapper<char_t, std::size_t>;
-
+  using string = std::basic_string_view<char_t>;
   using none = std::monostate;
+  using number = double;
+  using boolean = bool;
+  using list = list_tag;
 
   template <typename char_t>
-  using value = std::variant<
-      none,
-      boolean<char_t>,
-      number<char_t>,
-      string<char_t>,
-      object<char_t>>;
+  using value = std::variant<none, boolean, number, string<char_t>, list>;
 
   template <typename char_t, typename type_t>
   concept possible_value =
-      std::same_as<type_t, boolean<char_t>> or
-      std::same_as<type_t, number<char_t>> or
+      std::same_as<type_t, boolean> or
+      std::same_as<type_t, number> or
       std::same_as<type_t, string<char_t>> or
-      std::same_as<type_t, object<char_t>>;
+      std::same_as<type_t, list>;
+
+  constexpr std::size_t no_next = std::numeric_limits<std::size_t>::max();
+  constexpr std::size_t no_child = std::numeric_limits<std::size_t>::max();
+
+  template <typename char_t>
+  number to_number(std::basic_string_view<char_t> v)
+  {
+    number n = 0;
+
+    for (const char_t &c : v)
+      n = n * 10 + (c - '0');
+
+    return n;
+  }
 
   template <typename char_t>
   class node
   {
   public:
-    template <possible_value<char_t> value_t>
     explicit node(
-        sview<char_t> _name,
-        const value_t &_val,
-        std::size_t _next,
-        std::size_t _parent)
-        : name(_name),
-          val(_val),
-          next(_next),
-          parent(_parent) {}
+        clon_type type,
+        std::basic_string_view<char_t> _name,
+        std::basic_string_view<char_t> _valv)
+        : __name(_name), __valv(_valv)
+    {
+      using cl = clon_type;
+
+      switch (type)
+      {
+      case cl::boolean:
+        __val = __valv == "true";
+        break;
+      case cl::number:
+        __val = to_number(__valv);
+        break;
+      case cl::string:
+        __val = __valv;
+        break;
+      case cl::list:
+        __val = list();
+        break;
+      case cl::none:
+        __val = std::monostate{};
+        break;
+      }
+    }
 
   public:
-    const clon_type type() const noexcept
+    const clon_type type() const
     {
-      return static_cast<clon_type>(val.index());
+      return static_cast<clon_type>(__val.index());
     }
 
-    template <possible_value<char_t> type_t>
-    const bool is_() const
+    template <typename type_t>
+    requires possible_value<char_t, type_t> const bool is_() const
     {
-      if constexpr (std::is_same_v<type_t, boolean<char_t>>)
-        return type() == clon_type::boolean;
-      if constexpr (std::is_same_v<type_t, object<char_t>>)
-        return type() == clon_type::object;
+      using cl = clon_type;
+
+      if constexpr (std::is_same_v<type_t, boolean>)
+        return type() == cl::boolean;
+      if constexpr (std::is_same_v<type_t, list>)
+        return type() == cl::list;
       if constexpr (std::is_same_v<type_t, string<char_t>>)
-        return type() == clon_type::string;
-      if constexpr (std::is_same_v<type_t, number<char_t>>)
-        return type() == clon_type::number;
+        return type() == cl::string;
+      if constexpr (std::is_same_v<type_t, number>)
+        return type() == cl::number;
       if constexpr (std::is_same_v<type_t, none>)
-        return type() == clon_type::none;
+        return type() == cl::none;
     }
 
-    template <possible_value<char_t> type_t>
-    const type_t &as_() const
+    template <typename type_t>
+    requires possible_value<char_t, type_t> const type_t &as_() const
     {
-      return std::get<type_t>(val);
+      return std::get<type_t>(__val);
+    }
+
+    const std::basic_string_view<char_t> &name() const
+    {
+      return __name;
+    }
+
+    const std::size_t &child() const
+    {
+      return __child;
+    }
+
+    const std::size_t &next() const
+    {
+      return __next;
+    }
+
+    const std::basic_string_view<char_t> valv() const
+    {
+      return __valv;
+    }
+
+  public:
+    std::size_t update_child(std::size_t _child)
+    {
+      return __child = _child;
+    }
+
+    std::size_t update_next(std::size_t _next)
+    {
+      return __next = _next;
     }
 
   private:
-    sview<char_t> name;
-    value<char_t> val;
-    std::size_t next;
-    std::size_t parent;
+    std::basic_string_view<char_t> __name;
+    value<char_t> __val;
+    std::basic_string_view<char_t> __valv;
+    std::size_t __next = no_next;
+    std::size_t __child = no_child;
   };
-
-  template <typename char_t, typename... chars_t>
-  bool is_one_of(char_t c, char_t f, chars_t... cs)
-  {
-    return ((c == cs) or ... or (c == f));
-  }
-
-  template <typename iterator>
-  iterator omit_blanks(iterator b, iterator e)
-  {
-    while (b != e and is_one_of(*b, ' ', '\t', '\n', '\r'))
-      ++b;
-
-    return b;
-  }
-
-  template <typename iterator>
-  clon_type next_could_be(iterator b, iterator e)
-  {
-    clon_type type(clon_type::none);
-
-    if (b != e)
-    {
-      const auto &c = *b;
-
-      if (c == '"')
-        type = clon_type::string;
-      else if (c == '(')
-        type = clon_type::object;
-      else if (c == 't' or c == 'f')
-        type = clon_type::boolean;
-      else if ('0' <= c <= '9')
-        type = clon_type::number;
-    }
-
-    return type;
-  }
 
   enum class symbol_type : int
   {
@@ -151,6 +167,7 @@ namespace clon
     blank,
     letter_f,
     letter_t,
+    lower,
     dquote,
     digit,
     lpar,
@@ -158,244 +175,270 @@ namespace clon
     other
   };
 
-  template <typename char_t>
-  struct token
+  constexpr std::array<symbol_type, 128> ascii_build()
   {
-    std::basic_string_view<char_t> v;
-  };
+    using sb = symbol_type;
+
+    std::array<sb, 128> table;
+
+    for (sb &sb : table)
+      sb = sb::other;
+
+    for (char l = 'a'; l <= 'z'; ++l)
+      table[l] = sb::lower;
+
+    for (char l = '0'; l <= '9'; ++l)
+      table[l] = sb::digit;
+
+    table['f'] = sb::letter_f;
+    table['t'] = sb::letter_t;
+    table['"'] = sb::dquote;
+    table['('] = sb::lpar;
+    table[')'] = sb::rpar;
+    table[' '] = sb::blank;
+    table['\n'] = sb::blank;
+    table['\r'] = sb::blank;
+    table['\t'] = sb::blank;
+    table['\0'] = sb::eos;
+
+    return table;
+  }
+
+  constexpr std::array<symbol_type, 128> ascii_to_sb = ascii_build();
 
   template <typename char_t>
-  class scanner_context
+  class scanner final
   {
-    std::basic_string_view<char_t> data;
-    std::size_t index = 0;
-    std::size_t prev = 0;
+  public:
+    explicit scanner(
+        std::basic_string_view<char_t> v)
+        : __data(v) {}
 
   public:
-    explicit scanner_context(
-        std::basic_string_view<char_t> d)
-        : data(d) {}
-
-  public:
-    const char_t &ch() const
+    symbol_type symbol()
     {
-      return data[index];
+      if (not closed())
+        if (ch() > 127)
+          return sb::other;
+        else
+          return ascii_to_sb[ch()];
+      else
+        return sb::eos;
     }
 
-    const bool closed() const
+    std::basic_string_view<char_t> name()
     {
-      return index >= data.size();
+      ignore_blanks();
+
+      while (symbol() == sb::lower or
+             symbol() == sb::letter_f or
+             symbol() == sb::letter_t)
+        advance();
+
+      return extract();
     }
 
-    const bool currently_is(
-        const char_t &c) const
+    std::basic_string_view<char_t> boolean()
+    {
+      ignore_blanks();
+
+      if (starts_with("true"))
+        advance(4);
+      else if (starts_with("false"))
+        advance(5);
+
+      return extract();
+    }
+
+    std::basic_string_view<char_t> string()
+    {
+      ignore_blanks();
+
+      if (symbol() == sb::dquote)
+      {
+        advance();
+
+        while (symbol() != sb::dquote)
+          advance();
+
+        if (symbol() == sb::dquote)
+          advance();
+      }
+
+      return extract();
+    }
+
+    std::basic_string_view<char_t> number()
+    {
+      ignore_blanks();
+
+      while (symbol() == sb::digit)
+        advance();
+
+      return extract();
+    }
+
+    void ignore_blanks()
+    {
+      while (symbol() == sb::blank)
+        advance();
+
+      ignore();
+    }
+
+    void ignore_symbol()
+    {
+      advance();
+      ignore();
+    }
+
+  private:
+    const char_t &ch()
+    {
+      return __data[__index];
+    }
+
+    bool closed()
+    {
+      return __index >= __data.size();
+    }
+
+    bool currently_is(
+        const char_t &c)
     {
       return ch() == c;
     }
 
-    const bool currently_is(
+    bool currently_in(
         const char_t &mn,
-        const char_t &mx) const
+        const char_t &mx)
     {
       return mn <= ch() and ch() <= mx;
     }
 
     template <typename... chars_t>
-    const bool currently_oneof(
+    bool currently_oneof(
         const char_t &h,
-        const chars_t &...t) const
+        const chars_t &...t)
     {
       return ((ch() == t) or ... or (ch() == h));
     }
 
-    const bool starts_with(
-        std::basic_string_view<char_t> v) const
+    bool starts_with(
+        std::basic_string_view<char_t> v)
     {
-      return data.substr(index).starts_with(v);
+      return not closed() and __data.substr(__index).starts_with(v);
     }
 
     void advance(std::size_t step = 1)
     {
-      if (index + step <= data.size())
-        index += step;
+      if (__index + step <= __data.size())
+        __index += step;
     }
 
-    token<char_t> extract()
+    std::basic_string_view<char_t> extract()
     {
-      std::basic_string_view<char_t> tk(&data[prev], index - prev);
-      prev = index;
+      std::basic_string_view<char_t> tk(&__data[__prev], __index - __prev);
+      __prev = __index;
       return tk;
     }
 
     void ignore()
     {
-      prev = index;
+      __prev = __index;
     }
-  };
-
-  template <typename char_t>
-  class scanner
-  {
-    scanner_context<char_t> ctx;
-
-  public:
-    explicit scanner(
-        std::basic_string_view<char_t> v)
-        : ctx(v) {}
-
-  public:
-    symbol_type symbol()
-    {
-      using sb = symbol_type;
-
-      if (not ctx.closed())
-      {
-        if (ctx.currently_is('('))
-          return sb::lpar;
-        else if (ctx.currently_is(')'))
-          return sb::rpar;
-        else if (ctx.currently_is('"'))
-          return sb::dquote;
-        else if (ctx.currently_is('t'))
-          return sb::letter_t;
-        else if (ctx.currently_is('f'))
-          return sb::letter_f;
-        else if (ctx.currently_is('0', '9'))
-          return sb::digit;
-        else if (ctx.currently_oneof(' ', '\n', '\r', '\t'))
-          return sb::blank;
-        else
-          return sb::other;
-      }
-      else
-        return sb::eos;
-    }
-
-    token<char_t> name()
-    {
-      while (not ctx.closed() and
-             ctx.currently_is('a', 'z'))
-        ctx.advance();
-
-      return ctx.extract();
-    }
-
-    token<char_t> boolean()
-    {
-      if (not ctx.closed() and
-          ctx.starts_with("true"))
-        ctx.advance(4);
-      else if (not ctx.closed() and
-               ctx.starts_with("false"))
-        ctx.advance(5);
-
-      return ctx.extract();
-    }
-
-    token<char_t> string()
-    {
-      if (ctx.currently_is('"'))
-      {
-        ctx.advance();
-
-        while (not ctx.closed() and
-               not ctx.currently_is('"'))
-          ctx.advance();
-
-        if (not ctx.closed() and
-            ctx.currently_is('"'))
-          ctx.advance();
-      }
-
-      return ctx.extract();
-    }
-
-    token<char_t> number()
-    {
-      while (not ctx.closed() and
-             ctx.currently_is('0', '9'))
-        ctx.advance();
-
-      return ctx.extract();
-    }
-
-    void ignore_blanks()
-    {
-      while (not ctx.closed() and
-             ctx.currently_oneof(' ', '\n', '\r', '\t'))
-        ctx.advance();
-
-      ctx.ignore();
-    }
-
-    void ignore_symbol()
-    {
-      ctx.advance();
-      ctx.ignore();
-    }
-  };
-
-  template <typename char_t>
-  struct parser_context
-  {
-    std::vector<node<char_t>> &nodes;
-    scanner<char_t> scan;
-
-  public:
-    explicit parser_context(
-        std::vector<node<char_t>> &_nodes,
-        std::basic_string_view<char_t> v)
-        : nodes(_nodes), scan(v) {}
-
-  public:
-    void open_object()
-    {
-      scan.ignore_blanks();
-
-      if (scan.symbol() == symbol_type::lpar)
-        scan.ignore_symbol();
-    }
-
-    void close_object()
-    {
-      scan.ignore_blanks();
-
-      if (scan.symbol() == symbol_type::rpar)
-        scan.ignore_symbol();
-    }
-
-    token<char_t> object_name()
-    {
-      return scan.name();
-    }
-  };
-
-  template <typename char_t>
-  struct parser final 
-  {
-  private:
-    parser_context<char_t> ctx;
 
   private:
-    using parent_index = std::size_t;
+    using sb = symbol_type;
 
+    std::basic_string_view<char_t> __data;
+    std::size_t __index = 0;
+    std::size_t __prev = 0;
+  };
+
+  template <typename char_t>
+  class parser final
+  {
   public:
     explicit parser(
         std::vector<node<char_t>> &nodes,
         std::basic_string_view<char_t> v)
-        : ctx(nodes, v) {}
+        : nodes(nodes), scan(v) {}
 
   public:
-    void object(parent_index parent)
+    void parse_node()
     {
-      ctx.open_object();
+      open_node();
 
-      token<char_t> &&name(ctx.scan.name());
+      std::basic_string_view<char_t> &&name(scan.name());
+      scan.ignore_blanks();
 
-      // TODO HERE
- 
-      ctx.close_object();
+      switch (scan.symbol())
+      {
+      case sb::letter_f:
+      case sb::letter_t:
+        nodes.emplace_back(node<char_t>(cl::boolean, name, scan.boolean()));
+        break;
+      case sb::dquote:
+        nodes.emplace_back(node<char_t>(cl::string, name, scan.string()));
+        break;
+      case sb::digit:
+        nodes.emplace_back(node<char_t>(cl::number, name, scan.number()));
+        break;
+      case sb::lpar:
+      {
+        nodes.emplace_back(node<char_t>(cl::list, name, std::basic_string_view<char_t>()));
+        nodes.back().update_child(nodes.size());
+        parse_list();
+        break;
+      }
+      default:
+        break;
+      }
+
+      close_node();
     }
+
+  private:
+    using sb = symbol_type;
+    using cl = clon_type;
+
+    void open_node()
+    {
+      scan.ignore_blanks();
+
+      if (scan.symbol() == sb::lpar)
+        scan.ignore_symbol();
+    }
+
+    void close_node()
+    {
+      scan.ignore_blanks();
+
+      if (scan.symbol() == sb::rpar)
+        scan.ignore_symbol();
+    }
+
+    void parse_list()
+    {
+      scan.ignore_blanks();
+      std::size_t index = nodes.size();
+      std::size_t count = 0;
+
+      while (scan.symbol() == sb::lpar)
+      {
+        if (count > 0)
+          index = nodes[index].update_next(nodes.size());
+
+        parse_node();
+        scan.ignore_blanks();
+        count++;
+      }
+    }
+
+  private:
+    std::vector<node<char_t>> &nodes;
+    scanner<char_t> scan;
   };
 
   template <typename char_t,
@@ -403,43 +446,44 @@ namespace clon
   class root final
   {
   public:
-    explicit root(sview<char_t> v) noexcept
+    explicit root(std::basic_string_view<char_t> v)
         : buff(v.begin(), v.end())
     {
       nodes.reserve(std::count(buff.begin(), buff.end(), '('));
-      parser_t{}.parse(buff, nodes);
+      std::basic_string_view<char_t> vbuff(buff.begin(), buff.end());
+      parser_t(nodes, vbuff).parse_node();
     }
 
   public:
-    static const node<char_t> &undefined() noexcept
+    static const node<char_t> &undefined()
     {
       static node<char_t> undef;
       return undef;
     }
 
-    const std::basic_string<char_t> to_string() const noexcept
+    const std::basic_string<char_t> to_string() const
     {
       std::basic_string<char_t> s;
       s.reserve(buff.size());
       return s;
     }
 
-    const node<char_t> &get(sview<char_t> pth) const noexcept
+    const node<char_t> &get(std::basic_string_view<char_t> pth) const
     {
       return undefined();
     }
 
-    const node<char_t> &operator[](sview<char_t> pth) const noexcept
+    const node<char_t> &operator[](std::basic_string_view<char_t> pth) const
     {
       return get(pth);
     }
 
-    bool parsed() const noexcept
+    bool parsed() const
     {
       return not nodes.empty();
     }
 
-  private:
+  public:
     std::vector<char_t> buff;
     std::vector<node<char_t>> nodes;
   };
