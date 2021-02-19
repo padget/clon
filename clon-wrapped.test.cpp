@@ -16,31 +16,12 @@ constexpr std::string_view cl2 = R"(
 void first_try()
 {
   clon::root<char> r(cl2);
-  std::size_t index = 0;
 
-  for (auto &&node : r.nodes)
-  {
-    std::cout << clon::fmt::format(
-        "index : {}, name : {}, valv: {}, child: {}, nexts {}\n",
-        index++, node.name(), node.valv(), node.child(), node.next());
+  std::cout << clon::fmt::format("{}\n", r);
+  std::cout << clon::fmt::format("{}\n", clon::root_view<char, clon::parser<char>>(r, 7));
+  std::cout << clon::fmt::format("{}\n", clon::root_view<char, clon::parser<char>>(r, 6));
 
-    std::cout << "type :" << ((unsigned)node.type()) << "\n";
-
-    switch (node.type())
-    {
-    case clon::clon_type::boolean:
-      std::cout << node.as_<clon::boolean>() << '\n';
-      break;
-    case clon::clon_type::number:
-      std::cout << node.as_<clon::number>() << '\n';
-      break;
-    case clon::clon_type::string:
-      std::cout << node.as_<clon::string<char>>() << '\n';
-      break;
-    default:
-      break;
-    }
-  }
+  
 }
 
 #include <typeinfo>
@@ -48,4 +29,5 @@ void first_try()
 int main(int argc, char **argv)
 {
   run_test(first_try);
+  return EXIT_SUCCESS;
 }

@@ -48,6 +48,7 @@ namespace clon
 
   constexpr std::size_t no_next = std::numeric_limits<std::size_t>::max();
   constexpr std::size_t no_child = std::numeric_limits<std::size_t>::max();
+  constexpr std::size_t no_root = std::numeric_limits<std::size_t>::max();
 
   template <typename char_t>
   number to_number(std::basic_string_view<char_t> v)
@@ -64,6 +65,7 @@ namespace clon
   class node
   {
   public:
+    node() = default;
     explicit node(
         clon_type type,
         std::basic_string_view<char_t> _name,
@@ -232,8 +234,8 @@ namespace clon
           symbol() != sb::letter_f and
           symbol() != sb::letter_t)
         throw std::runtime_error(
-          clon::fmt::format(
-            "name scanning : expected char in [a-z] at index {}", __index));
+            clon::fmt::format(
+                "name scanning : expected char in [a-z] at index {}", __index));
 
       while (symbol() == sb::lower or
              symbol() == sb::letter_f or
@@ -254,7 +256,7 @@ namespace clon
       else
         throw std::runtime_error(
             clon::fmt::format(
-              "boolean scanning : expected 'true' or 'false' at index {}", __index));
+                "boolean scanning : expected 'true' or 'false' at index {}", __index));
 
       return extract();
     }
@@ -275,12 +277,12 @@ namespace clon
         else
           throw std::runtime_error(
               clon::fmt::format(
-                "string scanning : expected '\"' at index {}", __index));
+                  "string scanning : expected '\"' at index {}", __index));
       }
       else
         throw std::runtime_error(
             clon::fmt::format(
-              "string scanning : expected '\"' at index {}", __index));
+                "string scanning : expected '\"' at index {}", __index));
 
       return extract();
     }
@@ -292,7 +294,7 @@ namespace clon
       if (symbol() != sb::digit)
         throw std::runtime_error(
             clon::fmt::format(
-              "number scanning : expected char in [0-9] at index {}", __index));
+                "number scanning : expected char in [0-9] at index {}", __index));
 
       while (symbol() == sb::digit)
         advance();
@@ -309,7 +311,7 @@ namespace clon
       else
         throw std::runtime_error(
             clon::fmt::format(
-              "lpar scanning : expected char '(' at index {}", __index));
+                "lpar scanning : expected char '(' at index {}", __index));
     }
 
     void close_node()
@@ -321,7 +323,7 @@ namespace clon
       else
         throw std::runtime_error(
             clon::fmt::format(
-              "lpar scanning : expected char '(' at index {}", __index));
+                "lpar scanning : expected char '(' at index {}", __index));
     }
 
     void ignore_blanks()
@@ -481,7 +483,16 @@ namespace clon
     {
       nodes.reserve(std::count(buff.begin(), buff.end(), '('));
       std::basic_string_view<char_t> vbuff(buff.begin(), buff.end());
-      parser_t(nodes, vbuff).parse_node();
+
+      try
+      {
+        parser_t(nodes, vbuff).parse_node();
+      }
+      catch (const std::exception &e)
+      {
+        nodes.clear();
+        throw e;
+      }
     }
 
   public:
@@ -514,9 +525,114 @@ namespace clon
     }
 
   public:
+    std::basic_string<char_t> to_string()
+    {
+      return clon::fmt::format("{}", *this);
+    }
+
+  public:
+    const node<char_t> &at(std::size_t index) const
+    {
+      return index >= nodes.size() ? undefined() : nodes[index];
+    }
+
+  public:
     std::vector<char_t> buff;
     std::vector<node<char_t>> nodes;
   };
+
+  template <
+      typename char_t, typename parser_t>
+  class root_view
+  {
+  public:
+    explicit root_view(
+        const root<char_t, parser_t> &r,
+        const std::size_t &index)
+        : __r(r),
+          __index(index >= r.nodes.size() ? no_root : index) {}
+
+  public:
+    const root<char_t, parser_t> &data() const
+    {
+      return __r;
+    }
+    
+    const node<char_t> &rnode() const
+    {
+      return __r.at(__index);
+    }
+
+    const node<char_t> &at(std::size_t index) const
+    {
+      return __r.at(index);
+    }
+
+    const root_view view_at(std::size_t index) const
+    {
+      return root_view(__r, index);
+    }
+
+  private:
+    const root<char_t, parser_t> &__r;
+    std::size_t __index = no_root;
+  };
+
+  template <typename char_t, typename parser_t>
+  std::size_t length_of(
+      const root<char_t, parser_t> &r)
+  {
+    return r.buff.size();
+  }
+
+  template <typename char_t, typename parser_t>
+  std::size_t length_of(
+      const root_view<char_t, parser_t> &r)
+  {
+    return length_of(r.data());
+  }
+
+  template <typename char_t, typename parser_t>
+  void format_of(
+      clon::fmt::formatter_context<char_t> &ctx,
+      const root_view<char_t, parser_t> &rf)
+  {
+    const node<char_t> &n = rf.rnode();
+
+    switch (n.type())
+    {
+    case clon_type::boolean:
+    case clon_type::number:
+    case clon_type::string:
+      clon::fmt::format_into(ctx, "({} {})", n.name(), n.valv());
+      break;
+    case clon_type::list:
+    {
+      clon::fmt::format_into(ctx, "({} ", n.name());
+      std::size_t index = n.child();
+
+      while (index != no_next)
+      {
+        format_of(ctx, rf.view_at(index));
+        index = rf.at(index).next();
+      }
+
+      clon::fmt::format_into(ctx, ")");
+      break;
+    }
+    case clon_type::none:
+      break;
+    }
+  }
+
+  template <typename char_t, typename parser_t>
+  void format_of(
+      clon::fmt::formatter_context<char_t> &ctx,
+      const root<char_t, parser_t> &r)
+  {
+    if (r.parsed())
+      format_of(ctx, root_view<char_t, parser_t>(r, 0));
+  }
 
 } // namespace clon
 
