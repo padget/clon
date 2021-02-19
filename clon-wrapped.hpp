@@ -22,9 +22,6 @@ namespace clon
     list = 4
   };
 
-  template <typename char_t>
-  struct node;
-
   struct list_tag
   {
   };
@@ -138,7 +135,7 @@ namespace clon
       return __next;
     }
 
-    const std::basic_string_view<char_t> valv() const
+    const std::basic_string_view<char_t> &valv() const
     {
       return __valv;
     }
@@ -541,6 +538,49 @@ namespace clon
     std::vector<node<char_t>> nodes;
   };
 
+  template <typename char_t>
+  struct node_iterator
+  {
+    const root<char_t> &r;
+    std::size_t index = no_next;
+
+    using iterator_category = std::forward_iterator_tag;
+    using difference_type = std::ptrdiff_t;
+    using value_type = std::pair<const node<char_t> &, std::size_t>;
+
+    value_type operator*()
+    {
+      return {r.at(index), index};
+    }
+
+    node_iterator &operator++()
+    {
+      index = r.at(index).next();
+      return *this;
+    }
+
+    node_iterator operator++(int)
+    {
+      node_iterator tmp(*this);
+      ++(*this);
+      return tmp;
+    }
+
+    friend bool operator==(
+        const node_iterator &a,
+        const node_iterator &b)
+    {
+      return &a.r == &b.r and a.index == b.index;
+    }
+
+    friend bool operator!=(
+        const node_iterator &a,
+        const node_iterator &b)
+    {
+      return not(a == b);
+    }
+  };
+
   template <
       typename char_t, typename parser_t>
   class root_view
@@ -557,7 +597,7 @@ namespace clon
     {
       return __r;
     }
-    
+
     const node<char_t> &rnode() const
     {
       return __r.at(__index);
@@ -571,6 +611,27 @@ namespace clon
     const root_view view_at(std::size_t index) const
     {
       return root_view(__r, index);
+    }
+
+  public:
+    node_iterator<char_t> begin()
+    {
+      return {__r, __index};
+    }
+
+    node_iterator<char_t> end()
+    {
+      return {__r, no_next};
+    }
+
+    node_iterator<char_t> begin() const
+    {
+      return {__r, __index};
+    }
+
+    node_iterator<char_t> end() const
+    {
+      return {__r, no_next};
     }
 
   private:
@@ -609,13 +670,9 @@ namespace clon
     case clon_type::list:
     {
       clon::fmt::format_into(ctx, "({} ", n.name());
-      std::size_t index = n.child();
-
-      while (index != no_next)
-      {
-        format_of(ctx, rf.view_at(index));
-        index = rf.at(index).next();
-      }
+  
+      for (auto &&ni : rf.view_at(n.child()))
+        format_of(ctx, rf.view_at(ni.second));
 
       clon::fmt::format_into(ctx, ")");
       break;
