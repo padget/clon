@@ -11,7 +11,7 @@ constexpr std::string_view cl2 = R"(
   (log 
     (level 12))
   (log 
-    (level 12)))";
+    (level 12))))";
 
 void first_try()
 {

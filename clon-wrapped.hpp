@@ -5,10 +5,9 @@
 #include <string>
 #include <variant>
 #include <vector>
-#include <span>
 #include <limits>
 #include <array>
-#include <charconv>
+#include <stdexcept>
 
 #include "format.hpp"
 
@@ -229,6 +228,12 @@ namespace clon
     std::basic_string_view<char_t> name()
     {
       ignore_blanks();
+      if (symbol() != sb::lower and
+          symbol() != sb::letter_f and
+          symbol() != sb::letter_t)
+        throw std::runtime_error(
+          clon::fmt::format(
+            "name scanning : expected char in [a-z] at index {}", __index));
 
       while (symbol() == sb::lower or
              symbol() == sb::letter_f or
@@ -246,6 +251,10 @@ namespace clon
         advance(4);
       else if (starts_with("false"))
         advance(5);
+      else
+        throw std::runtime_error(
+            clon::fmt::format(
+              "boolean scanning : expected 'true' or 'false' at index {}", __index));
 
       return extract();
     }
@@ -263,7 +272,15 @@ namespace clon
 
         if (symbol() == sb::dquote)
           advance();
+        else
+          throw std::runtime_error(
+              clon::fmt::format(
+                "string scanning : expected '\"' at index {}", __index));
       }
+      else
+        throw std::runtime_error(
+            clon::fmt::format(
+              "string scanning : expected '\"' at index {}", __index));
 
       return extract();
     }
@@ -272,10 +289,39 @@ namespace clon
     {
       ignore_blanks();
 
+      if (symbol() != sb::digit)
+        throw std::runtime_error(
+            clon::fmt::format(
+              "number scanning : expected char in [0-9] at index {}", __index));
+
       while (symbol() == sb::digit)
         advance();
 
       return extract();
+    }
+
+    void open_node()
+    {
+      ignore_blanks();
+
+      if (symbol() == sb::lpar)
+        ignore_symbol();
+      else
+        throw std::runtime_error(
+            clon::fmt::format(
+              "lpar scanning : expected char '(' at index {}", __index));
+    }
+
+    void close_node()
+    {
+      ignore_blanks();
+
+      if (symbol() == sb::rpar)
+        ignore_symbol();
+      else
+        throw std::runtime_error(
+            clon::fmt::format(
+              "lpar scanning : expected char '(' at index {}", __index));
     }
 
     void ignore_blanks()
@@ -368,7 +414,7 @@ namespace clon
   public:
     void parse_node()
     {
-      open_node();
+      scan.open_node();
 
       std::basic_string_view<char_t> &&name(scan.name());
       scan.ignore_blanks();
@@ -396,28 +442,12 @@ namespace clon
         break;
       }
 
-      close_node();
+      scan.close_node();
     }
 
   private:
     using sb = symbol_type;
     using cl = clon_type;
-
-    void open_node()
-    {
-      scan.ignore_blanks();
-
-      if (scan.symbol() == sb::lpar)
-        scan.ignore_symbol();
-    }
-
-    void close_node()
-    {
-      scan.ignore_blanks();
-
-      if (scan.symbol() == sb::rpar)
-        scan.ignore_symbol();
-    }
 
     void parse_list()
     {
