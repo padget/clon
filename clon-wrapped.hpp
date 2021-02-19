@@ -668,15 +668,11 @@ namespace clon
       clon::fmt::format_into(ctx, "({} {})", n.name(), n.valv());
       break;
     case clon_type::list:
-    {
       clon::fmt::format_into(ctx, "({} ", n.name());
-  
       for (auto &&ni : rf.view_at(n.child()))
         format_of(ctx, rf.view_at(ni.second));
-
       clon::fmt::format_into(ctx, ")");
       break;
-    }
     case clon_type::none:
       break;
     }
@@ -690,7 +686,6 @@ namespace clon
     if (r.parsed())
       format_of(ctx, root_view<char_t, parser_t>(r, 0));
   }
-
 } // namespace clon
 
 #endif
