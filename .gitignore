@@ -33,3 +33,6 @@
 
 # Distribution
 *.zip
+
+# Development
+.vscode

@@ -43,14 +43,28 @@ namespace clon
       std::same_as<type_t, string<char_t>> or
       std::same_as<type_t, list>;
 
-  constexpr std::size_t no_next = std::numeric_limits<std::size_t>::max();
-  constexpr std::size_t no_child = std::numeric_limits<std::size_t>::max();
-  constexpr std::size_t no_root = std::numeric_limits<std::size_t>::max();
+  template <std::integral t>
+  constexpr t maxof = std::numeric_limits<t>::max();
+
+  constexpr std::size_t no_next = maxof<std::size_t>;
+  constexpr std::size_t no_child = maxof<std::size_t>;
+  constexpr std::size_t no_root = maxof<std::size_t>;
 
   template <typename char_t>
   number to_number(std::basic_string_view<char_t> v)
   {
     number n = 0;
+
+    for (const char_t &c : v)
+      n = n * 10 + (c - '0');
+
+    return n;
+  }
+
+  template <typename char_t>
+  std::size_t to_integer(std::basic_string_view<char_t> v)
+  {
+    std::size_t n = 0;
 
     for (const char_t &c : v)
       n = n * 10 + (c - '0');
@@ -120,33 +134,18 @@ namespace clon
       return std::get<type_t>(__val);
     }
 
-    const std::basic_string_view<char_t> &name() const
-    {
-      return __name;
-    }
-
-    const std::size_t &child() const
-    {
-      return __child;
-    }
-
-    const std::size_t &next() const
-    {
-      return __next;
-    }
-
-    const std::basic_string_view<char_t> &valv() const
-    {
-      return __valv;
-    }
+    const std::basic_string_view<char_t> &name() const { return __name; }
+    const std::size_t &child() const { return __child; }
+    const std::size_t &next() const { return __next; }
+    const std::basic_string_view<char_t> &valv() const { return __valv; }
 
   public:
-    std::size_t update_child(std::size_t _child)
+    const std::size_t &update_child(std::size_t _child)
     {
       return __child = _child;
     }
 
-    std::size_t update_next(std::size_t _next)
+    const std::size_t &update_next(std::size_t _next)
     {
       return __next = _next;
     }
@@ -205,44 +204,99 @@ namespace clon
   constexpr std::array<symbol_type, 128> ascii_to_sb = ascii_build();
 
   template <typename char_t>
-  class scanner final
+  class parser final
   {
   public:
-    explicit scanner(
+    explicit parser(
+        std::vector<node<char_t>> &nodes,
         std::basic_string_view<char_t> v)
-        : __data(v) {}
+        : __nodes(nodes),
+          __data(v) {}
 
   public:
+    void parse_node()
+    {
+      open_node();
+
+      std::basic_string_view<char_t> &&n(scan_name());
+      ignore_blanks();
+
+      switch (symbol())
+      {
+      case sb::letter_f:
+      case sb::letter_t:
+        __nodes.emplace_back(node<char_t>(cl::boolean, n, scan_boolean()));
+        break;
+      case sb::dquote:
+        __nodes.emplace_back(node<char_t>(cl::string, n, scan_string()));
+        break;
+      case sb::digit:
+        __nodes.emplace_back(node<char_t>(cl::number, n, scan_number()));
+        break;
+      case sb::lpar:
+        __nodes.emplace_back(node<char_t>(cl::list, n, scan_list()));
+        __nodes.back().update_child(__nodes.size());
+        parse_list();
+        break;
+      default:
+        break;
+      }
+
+      close_node();
+    }
+
+  private:
+    using sb = symbol_type;
+    using cl = clon_type;
+
+    void parse_list()
+    {
+      ignore_blanks();
+      std::size_t index = __nodes.size();
+      std::size_t count = 0;
+
+      while (symbol() == sb::lpar)
+      {
+        if (count > 0)
+          index = __nodes[index].update_next(__nodes.size());
+
+        parse_node();
+        ignore_blanks();
+        count++;
+      }
+    }
+
     symbol_type symbol()
     {
-      if (not closed())
-        if (ch() > 127)
-          return sb::other;
-        else
-          return ascii_to_sb[ch()];
+      if (__index < __data.size())
+        return __data[__index] > 127
+                   ? sb::other
+                   : ascii_to_sb[__data[__index]];
       else
         return sb::eos;
     }
 
-    std::basic_string_view<char_t> name()
+    std::basic_string_view<char_t> scan_name()
     {
       ignore_blanks();
-      if (symbol() != sb::lower and
-          symbol() != sb::letter_f and
-          symbol() != sb::letter_t)
-        throw std::runtime_error(
-            clon::fmt::format(
-                "name scanning : expected char in [a-z] at index {}", __index));
 
-      while (symbol() == sb::lower or
-             symbol() == sb::letter_f or
-             symbol() == sb::letter_t)
+      sb s = symbol();
+
+      if (s != sb::lower and
+          s != sb::letter_f and
+          s != sb::letter_t)
+        handle_error_expecting("[a-z]");
+
+      while (s == sb::lower or s == sb::letter_f or s == sb::letter_t)
+      {
         advance();
+        s = symbol();
+      }
 
       return extract();
     }
 
-    std::basic_string_view<char_t> boolean()
+    std::basic_string_view<char_t> scan_boolean()
     {
       ignore_blanks();
 
@@ -251,14 +305,12 @@ namespace clon
       else if (starts_with("false"))
         advance(5);
       else
-        throw std::runtime_error(
-            clon::fmt::format(
-                "boolean scanning : expected 'true' or 'false' at index {}", __index));
+        handle_error_expecting("'true' or 'false'");
 
       return extract();
     }
 
-    std::basic_string_view<char_t> string()
+    std::basic_string_view<char_t> scan_string()
     {
       ignore_blanks();
 
@@ -272,26 +324,20 @@ namespace clon
         if (symbol() == sb::dquote)
           advance();
         else
-          throw std::runtime_error(
-              clon::fmt::format(
-                  "string scanning : expected '\"' at index {}", __index));
+          handle_error_expecting("'\"'");
       }
       else
-        throw std::runtime_error(
-            clon::fmt::format(
-                "string scanning : expected '\"' at index {}", __index));
+        handle_error_expecting("'\"'");
 
       return extract();
     }
 
-    std::basic_string_view<char_t> number()
+    std::basic_string_view<char_t> scan_number()
     {
       ignore_blanks();
 
       if (symbol() != sb::digit)
-        throw std::runtime_error(
-            clon::fmt::format(
-                "number scanning : expected char in [0-9] at index {}", __index));
+        handle_error_expecting("[0-9]");
 
       while (symbol() == sb::digit)
         advance();
@@ -299,16 +345,22 @@ namespace clon
       return extract();
     }
 
+    std::basic_string_view<char_t> scan_list()
+    {
+      return {};
+    }
+
     void open_node()
     {
       ignore_blanks();
 
       if (symbol() == sb::lpar)
-        ignore_symbol();
+      {
+        advance();
+        ignore();
+      }
       else
-        throw std::runtime_error(
-            clon::fmt::format(
-                "lpar scanning : expected char '(' at index {}", __index));
+        handle_error_expecting("'('");
     }
 
     void close_node()
@@ -316,11 +368,12 @@ namespace clon
       ignore_blanks();
 
       if (symbol() == sb::rpar)
-        ignore_symbol();
+      {
+        advance();
+        ignore();
+      }
       else
-        throw std::runtime_error(
-            clon::fmt::format(
-                "lpar scanning : expected char '(' at index {}", __index));
+        handle_error_expecting("')'");
     }
 
     void ignore_blanks()
@@ -331,48 +384,10 @@ namespace clon
       ignore();
     }
 
-    void ignore_symbol()
-    {
-      advance();
-      ignore();
-    }
-
-  private:
-    const char_t &ch()
-    {
-      return __data[__index];
-    }
-
-    bool closed()
-    {
-      return __index >= __data.size();
-    }
-
-    bool currently_is(
-        const char_t &c)
-    {
-      return ch() == c;
-    }
-
-    bool currently_in(
-        const char_t &mn,
-        const char_t &mx)
-    {
-      return mn <= ch() and ch() <= mx;
-    }
-
-    template <typename... chars_t>
-    bool currently_oneof(
-        const char_t &h,
-        const chars_t &...t)
-    {
-      return ((ch() == t) or ... or (ch() == h));
-    }
-
     bool starts_with(
         std::basic_string_view<char_t> v)
     {
-      return not closed() and __data.substr(__index).starts_with(v);
+      return __index < __data.size() and __data.substr(__index).starts_with(v);
     }
 
     void advance(std::size_t step = 1)
@@ -393,85 +408,26 @@ namespace clon
       __prev = __index;
     }
 
-  private:
-    using sb = symbol_type;
+    template <std::size_t n>
+    void handle_error_expecting(const char (&expected)[n])
+    {
+      throw std::runtime_error(
+          clon::fmt::format(
+              "scanning : expected {} at index {}", expected, __index));
+    }
 
+  private:
+    std::vector<node<char_t>> &__nodes;
     std::basic_string_view<char_t> __data;
     std::size_t __index = 0;
     std::size_t __prev = 0;
   };
 
+  template <
+      typename char_t>
+  class root_view;
+
   template <typename char_t>
-  class parser final
-  {
-  public:
-    explicit parser(
-        std::vector<node<char_t>> &nodes,
-        std::basic_string_view<char_t> v)
-        : nodes(nodes), scan(v) {}
-
-  public:
-    void parse_node()
-    {
-      scan.open_node();
-
-      std::basic_string_view<char_t> &&name(scan.name());
-      scan.ignore_blanks();
-
-      switch (scan.symbol())
-      {
-      case sb::letter_f:
-      case sb::letter_t:
-        nodes.emplace_back(node<char_t>(cl::boolean, name, scan.boolean()));
-        break;
-      case sb::dquote:
-        nodes.emplace_back(node<char_t>(cl::string, name, scan.string()));
-        break;
-      case sb::digit:
-        nodes.emplace_back(node<char_t>(cl::number, name, scan.number()));
-        break;
-      case sb::lpar:
-      {
-        nodes.emplace_back(node<char_t>(cl::list, name, std::basic_string_view<char_t>()));
-        nodes.back().update_child(nodes.size());
-        parse_list();
-        break;
-      }
-      default:
-        break;
-      }
-
-      scan.close_node();
-    }
-
-  private:
-    using sb = symbol_type;
-    using cl = clon_type;
-
-    void parse_list()
-    {
-      scan.ignore_blanks();
-      std::size_t index = nodes.size();
-      std::size_t count = 0;
-
-      while (scan.symbol() == sb::lpar)
-      {
-        if (count > 0)
-          index = nodes[index].update_next(nodes.size());
-
-        parse_node();
-        scan.ignore_blanks();
-        count++;
-      }
-    }
-
-  private:
-    std::vector<node<char_t>> &nodes;
-    scanner<char_t> scan;
-  };
-
-  template <typename char_t,
-            typename parser_t = parser<char_t>>
   class root final
   {
   public:
@@ -483,7 +439,7 @@ namespace clon
 
       try
       {
-        parser_t(nodes, vbuff).parse_node();
+        parser<char_t>(nodes, vbuff).parse_node();
       }
       catch (const std::exception &e)
       {
@@ -497,13 +453,6 @@ namespace clon
     {
       static node<char_t> undef;
       return undef;
-    }
-
-    const std::basic_string<char_t> to_string() const
-    {
-      std::basic_string<char_t> s;
-      s.reserve(buff.size());
-      return s;
     }
 
     const node<char_t> &get(std::basic_string_view<char_t> pth) const
@@ -521,171 +470,241 @@ namespace clon
       return not nodes.empty();
     }
 
-  public:
-    std::basic_string<char_t> to_string()
+    root_view<char_t>
+    view(const std::size_t &index = 0) const
     {
-      return clon::fmt::format("{}", *this);
+      return root_view<char_t>(*this, index);
     }
 
-  public:
-    const node<char_t> &at(std::size_t index) const
+    std::basic_string<char_t> to_string() const
+    {
+      return clon::fmt::format("{}", view());
+    }
+
+    const node<char_t> &at(
+        const std::size_t &index) const
     {
       return index >= nodes.size() ? undefined() : nodes[index];
     }
 
-  public:
+    std::size_t buffer_size() const { return buff.size(); }
+    std::size_t nodes_size() const { return nodes.size(); }
+
+  private:
     std::vector<char_t> buff;
     std::vector<node<char_t>> nodes;
   };
 
-  template <typename char_t>
-  struct node_iterator
+  template <
+      typename char_t>
+  class root_view
   {
-    const root<char_t> &r;
-    std::size_t index = no_next;
+  public:
+    explicit root_view(
+        const root<char_t> &r,
+        const std::size_t &index)
+        : __r(r),
+          __index(index >= r.nodes_size() ? no_root : index) {}
 
-    using iterator_category = std::forward_iterator_tag;
-    using difference_type = std::ptrdiff_t;
-    using value_type = std::pair<const node<char_t> &, std::size_t>;
+  public:
+    root_view begin() const { return root_view(__r, __index); }
+    root_view end() const { return root_view(__r, no_next); }
 
-    value_type operator*()
+    std::pair<const node<char_t> &, std::size_t>
+    operator*()
     {
-      return {r.at(index), index};
+      return {__r.at(__index), __index};
     }
 
-    node_iterator &operator++()
+    root_view &operator++()
     {
-      index = r.at(index).next();
+      __index = __r.at(__index).next();
       return *this;
     }
 
-    node_iterator operator++(int)
+    root_view operator++(int)
     {
-      node_iterator tmp(*this);
+      root_view tmp(*this);
       ++(*this);
       return tmp;
     }
 
     friend bool operator==(
-        const node_iterator &a,
-        const node_iterator &b)
+        const root_view &a,
+        const root_view &b)
     {
-      return &a.r == &b.r and a.index == b.index;
+      return &a.__r == &b.__r and
+             a.__index == b.__index;
     }
 
     friend bool operator!=(
-        const node_iterator &a,
-        const node_iterator &b)
+        const root_view &a,
+        const root_view &b)
     {
       return not(a == b);
     }
-  };
 
-  template <
-      typename char_t, typename parser_t>
-  class root_view
-  {
-  public:
-    explicit root_view(
-        const root<char_t, parser_t> &r,
-        const std::size_t &index)
-        : __r(r),
-          __index(index >= r.nodes.size() ? no_root : index) {}
-
-  public:
-    const root<char_t, parser_t> &data() const
+    friend std::size_t length_of(
+        const root_view &r)
     {
-      return __r;
+      return r.__r.parsed() ? r.__r.buffer_size() : 0;
     }
 
-    const node<char_t> &rnode() const
+    friend void format_of(
+        clon::fmt::formatter_context<char_t> &ctx,
+        const root_view &rf)
     {
-      return __r.at(__index);
-    }
+      namespace fmt = ::clon::fmt;
+      const node<char_t> &n = rf.__r.at(rf.__index);
 
-    const node<char_t> &at(std::size_t index) const
-    {
-      return __r.at(index);
-    }
-
-    const root_view view_at(std::size_t index) const
-    {
-      return root_view(__r, index);
-    }
-
-  public:
-    node_iterator<char_t> begin()
-    {
-      return {__r, __index};
-    }
-
-    node_iterator<char_t> end()
-    {
-      return {__r, no_next};
-    }
-
-    node_iterator<char_t> begin() const
-    {
-      return {__r, __index};
-    }
-
-    node_iterator<char_t> end() const
-    {
-      return {__r, no_next};
+      switch (n.type())
+      {
+      case clon_type::boolean:
+      case clon_type::number:
+      case clon_type::string:
+        fmt::format_into(ctx, "({} {})", n.name(), n.valv());
+        break;
+      case clon_type::list:
+        fmt::format_into(ctx, "({} ", n.name());
+        for (auto &&ni : rf.__r.view(n.child()))
+          format_of(ctx, rf.__r.view(ni.second));
+        fmt::format_into(ctx, ")");
+        break;
+      case clon_type::none:
+        break;
+      }
     }
 
   private:
-    const root<char_t, parser_t> &__r;
+    const root<char_t> &__r;
     std::size_t __index = no_root;
   };
 
-  template <typename char_t, typename parser_t>
-  std::size_t length_of(
-      const root<char_t, parser_t> &r)
-  {
-    return r.buff.size();
-  }
+  constexpr std::size_t path_max = maxof<std::size_t>;
 
-  template <typename char_t, typename parser_t>
-  std::size_t length_of(
-      const root_view<char_t, parser_t> &r)
+  template <typename char_t>
+  struct path
   {
-    return length_of(r.data());
-  }
+    std::basic_string_view<char_t> name;
+    std::size_t min;
+    std::size_t max;
+  };
 
-  template <typename char_t, typename parser_t>
-  void format_of(
-      clon::fmt::formatter_context<char_t> &ctx,
-      const root_view<char_t, parser_t> &rf)
+  template <typename char_t>
+  class path_parser
   {
-    const node<char_t> &n = rf.rnode();
+  public:
+    explicit path_parser(std::basic_string_view<char_t> _path)
+        : __data(_path) {}
 
-    switch (n.type())
+  public:
+    path<char_t> parse()
     {
-    case clon_type::boolean:
-    case clon_type::number:
-    case clon_type::string:
-      clon::fmt::format_into(ctx, "({} {})", n.name(), n.valv());
-      break;
-    case clon_type::list:
-      clon::fmt::format_into(ctx, "({} ", n.name());
-      for (auto &&ni : rf.view_at(n.child()))
-        format_of(ctx, rf.view_at(ni.second));
-      clon::fmt::format_into(ctx, ")");
-      break;
-    case clon_type::none:
-      break;
+      path<char_t> p;
+      p.name = scan_name();
+
+      if (scan_colon())
+      {
+        auto &&[min, max] = scan_interval();
+
+        p.max = max;
+        p.min = min;
+      }
+
+      return p;
     }
+
+    bool scan_colon()
+    {
+      if (__data[__index] == ':')
+      {
+        ignore();
+        return true;
+      }
+      return false;
+    }
+
+    std::pair<std::size_t, std::size_t> scan_interval()
+    {
+      if (__data[__index] == '*')
+        return {path_max, path_max};
+      else
+      {
+        std::size_t &&min = to_integer(scan_number());
+        return {min, min};
+      }
+    }
+
+    std::basic_string_view<char_t> scan_name()
+    {
+      if ('a' <= __data[__index] and __data[__index] <= 'z')
+        handle_error_expecting("[a-z]");
+
+      while ('a' <= __data[__index] and __data[__index] <= 'z')
+        advance();
+
+      return extract();
+    }
+
+    std::basic_string_view<char_t> scan_number()
+    {
+      if ('0' <= __data[__index] and __data[__index] <= '9')
+        handle_error_expecting("[0-9]");
+
+      while ('0' <= __data[__index] and __data[__index] <= '9')
+        advance();
+
+      return extract();
+    }
+
+  private:
+    void advance(std::size_t step = 1)
+    {
+      if (__index + step <= __data.size())
+        __index += step;
+    }
+
+    std::basic_string_view<char_t> extract()
+    {
+      std::basic_string_view<char_t> tk(&__data[__prev], __index - __prev);
+      __prev = __index;
+      return tk;
+    }
+
+    void ignore()
+    {
+      __prev = __index;
+    }
+
+    template <std::size_t n>
+    void handle_error_expecting(const char (&expected)[n])
+    {
+      throw std::runtime_error(
+          clon::fmt::format(
+              "scanning : expected {} at index {}", expected, __index));
+    }
+
+  private:
+    std::basic_string_view<char_t> __data;
+    std::size_t __index = 0;
+    std::size_t __prev = 0;
+  };
+
+  template <typename char_t>
+  void explore(
+      const path<char_t> &pth,
+      const root<char_t> &r)
+  {
   }
 
-  template <typename char_t, typename parser_t>
-  void format_of(
-      clon::fmt::formatter_context<char_t> &ctx,
-      const root<char_t, parser_t> &r)
+  template <typename char_t>
+  void explore(
+      std::basic_string_view<char_t> pth,
+      const root<char_t> &r)
   {
-    if (r.parsed())
-      format_of(ctx, root_view<char_t, parser_t>(r, 0));
+    return explore(path_parser<char_t>(pth).parse(), r);
   }
+
 } // namespace clon
 
 #endif
