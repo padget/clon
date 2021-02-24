@@ -9,9 +9,9 @@ constexpr std::string_view cl2 = R"(
     (level 12)
     (level 12)) 
   (log 
-    (level 12))
+    (level 13))
   (log 
-    (level 12))))";
+    (level 14))))";
 
 struct local_string_view
 {
@@ -21,8 +21,14 @@ struct local_string_view
 
 void first_try()
 {
-  std::cout << clon::fmt::format("{}\n", clon::make_rview(clon::parse(cl2)));
+  using namespace clon::fmt;
+  using namespace clon;
+
+  std::cout << format("{}\n", make_rview(parse(cl2)));
   // std::cout << clon::fmt::format("{}", r["log.level"].name());
+  std::string_view pth = "log:1";
+  std::cout << format("{}\n", parse_path(pth).min);
+  std::cout << format("{}\n", getone(pth, make_rview(parse(cl2))));
 }
 
 #include <typeinfo>
