@@ -13,28 +13,36 @@ constexpr std::string_view cl2 = R"(
   (log 
     (level 14))))";
 
-struct local_string_view
-{
-  const char *data;
-  std::size_t s;
-};
-
 void first_try()
 {
   using namespace clon::fmt;
   using namespace clon;
 
-  std::cout << format("{}\n", make_rview(parse(cl2)));
-  // std::cout << clon::fmt::format("{}", r["log.level"].name());
-  std::string_view pth = "log:1";
-  std::cout << format("{}\n", parse_path(pth).min);
-  std::cout << format("{}\n", getone(pth, make_rview(parse(cl2))));
+  std::string_view tosplit = "toto.titi.tata";
+
+  auto spl = split(tosplit, '.');
+  auto b = spl.begin();
+  std::cout << *b << std::endl;
+  ++b;
+  std::cout << *b << std::endl;
+  ++b;
+  std::cout << *b << std::endl;
+  ++b;
+  std::cout << *b << std::endl;
 }
 
 #include <typeinfo>
 
 int main(int argc, char **argv)
 {
-  run_test(first_try);
+
+  using namespace clon::fmt;
+  using namespace clon;
+  std::string_view tosplit = "toto.titi:1.tata:4.";
+
+
+  for (const auto &s : split_paths(tosplit))
+    std::cout << format("{} : [{}-{}]\n", s.name, s.min, s.max);
+
   return EXIT_SUCCESS;
 }

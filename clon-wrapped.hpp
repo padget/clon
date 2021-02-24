@@ -576,8 +576,8 @@ namespace clon
   struct path
   {
     std::basic_string_view<char_t> name;
-    std::size_t min;
-    std::size_t max;
+    std::size_t min = path_max;
+    std::size_t max = path_max;
   };
 
   template <typename char_t>
@@ -617,8 +617,134 @@ namespace clon
 
     if (scan_colon(scan))
       std::tie(p.min, p.max) = scan_interval(scan);
+    else
+      p.min = p.max = 0;
 
     return p;
+  }
+
+  template <typename char_t>
+  struct splits_iterator
+  {
+    char_t del;
+    std::basic_string_view<char_t> data;
+
+    splits_iterator &operator++()
+    {
+      if (data.size() != 0)
+      {
+        auto found = std::find(data.begin(), data.end(), del);
+        data = std::basic_string_view<char_t>(
+            found == data.end() ? found : found + 1, data.end());
+      }
+
+      return *this;
+    }
+
+    const std::basic_string_view<char_t> operator*()
+    {
+      return std::basic_string_view<char_t>(
+          data.begin(), std::find(data.begin(), data.end(), del));
+    }
+
+    splits_iterator operator++(int)
+    {
+      splits_iterator tmp(*this);
+      ++(*this);
+      return tmp;
+    }
+
+    friend bool operator==(
+        const splits_iterator &a,
+        const splits_iterator &b)
+    {
+      return a.data.data() == b.data.data();
+    }
+
+    friend bool operator!=(
+        const splits_iterator &a,
+        const splits_iterator &b)
+    {
+      return not(a == b);
+    }
+  };
+
+  template <typename char_t>
+  struct splits
+  {
+    char_t del;
+    std::basic_string_view<char_t> data;
+
+    splits_iterator<char_t> begin() const
+    {
+      return splits_iterator<char_t>{del, data};
+    }
+
+    splits_iterator<char_t> end() const
+    {
+      return splits_iterator<char_t>{del, data.substr(data.size())};
+    }
+  };
+
+  template <typename char_t>
+  splits<char_t> split(
+      const std::basic_string_view<char_t> &data,
+      const char_t &del)
+  {
+    return splits<char_t>{del, data};
+  }
+
+  template <typename char_t>
+  struct paths_iterator
+  {
+    splits_iterator<char_t> sit;
+
+    paths_iterator &operator++()
+    {
+      ++sit;
+      return *this;
+    }
+
+    paths_iterator operator++(int)
+    {
+      paths_iterator tmp(*this);
+      ++(*this);
+      return tmp;
+    }
+
+    path<char_t> operator*()
+    {
+      return parse_path(*sit);
+    }
+
+    friend bool operator==(
+        const paths_iterator &a,
+        const paths_iterator &b)
+    {
+      return a.sit == b.sit;
+    }
+
+    friend bool operator!=(
+        const paths_iterator &a,
+        const paths_iterator &b)
+    {
+      return not(a == b);
+    }
+  };
+
+  template <typename char_t>
+  struct paths
+  {
+    splits<char_t> spl;
+
+    paths_iterator<char_t> begin() const { return {spl.begin()}; }
+    paths_iterator<char_t> end() const { return {spl.end()}; }
+  };
+
+  template <typename char_t>
+  paths<char_t> split_paths(const std::basic_string_view<char_t> &pths)
+  {
+    return paths<char_t>{split(pths, '.')};
   }
 
   template <typename char_t>
@@ -650,46 +776,52 @@ namespace clon
   }
 
   template <typename char_t>
-  struct paths_iterator
+  root_view<char_t> get(
+      const paths_iterator<char_t> &b,
+      const paths_iterator<char_t> &e,
+      const root_view<char_t> &view)
   {
-    std::basic_string_view<char_t> data;
-
-    nexts_iterator &operator++()
+    if (view.is_<list>())
     {
-      // TODO advance code
-      return *this;
-    }
+      const path<char_t> p = *b;
+      std::size_t cnt(0);
 
-    nexts_iterator operator++(int)
-    {
-      nexts_iterator tmp(*this);
-      ++(*this);
-      return tmp;
+      for (const std::size_t &i : indexes(make_rview(view, view.child())))
+      {
+        root_view<char_t> &&vi = make_rview(view, i);
+        
+        if (vi.name() == p.name)
+        {
+          
+        }
+      }
     }
-
-    const std::size_t &operator*() { return view.index; }
-
-    friend bool operator==(
-        const nexts_iterator &a,
-        const nexts_iterator &b)
-    {
-      return a.data == b.data and
-             a.view.index == b.view.index;
-    }
-
-    friend bool operator!=(
-        const nexts_iterator &a,
-        const nexts_iterator &b)
-    {
-      return not(a == b);
-    }
-  };
+  }
 
   template <typename char_t>
-  struct paths
+  root_view<char_t> get(
+      const paths<char_t> &pths,
+      const root_view<char_t> &view)
   {
-    std::basic_string_view<char_t> data;
-  };
+    root_view<char_t> found = view;
+
+    for (const path<char_t> &pth : pths)
+      switch (view.type())
+      {
+      case clon_type::boolean:
+      case clon_type::number:
+      case clon_type::string:
+      case clon_type::list:
+      }
+  }
+
+  template <typename char_t>
+  root_view<char_t> get(
+      const std::basic_string_view<char_t> &pth,
+      const root_view<char_t> &view)
+  {
+    return get(split_paths(pth), view);
+  }
 
 } // namespace clon
 

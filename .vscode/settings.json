@@ -77,6 +77,7 @@
     "locale": "cpp",
     "queue": "cpp",
     "stack": "cpp",
-    "charconv": "cpp"
+    "charconv": "cpp",
+    "source_location": "cpp"
   }
 }
