@@ -36,13 +36,6 @@ namespace clon
   template <typename char_t>
   using value = std::variant<none, boolean, number, string<char_t>, list>;
 
-  template <typename char_t, typename type_t>
-  concept possible_value =
-      std::same_as<type_t, boolean> or
-      std::same_as<type_t, number> or
-      std::same_as<type_t, string<char_t>> or
-      std::same_as<type_t, list>;
-
   template <std::integral t>
   constexpr t maxof = std::numeric_limits<t>::max();
 
@@ -144,26 +137,24 @@ namespace clon
     const clon_type type() const { return static_cast<clon_type>(root->nodes[index].val.index()); }
 
     template <typename type_t>
-    requires possible_value<char_t, type_t> const type_t &as_() const
+    const type_t &as_() const
     {
       return std::get<type_t>(root->nodes[index].val);
     }
 
     template <typename type_t>
-    requires possible_value<char_t, type_t> const bool is_() const
+    const bool is_() const
     {
-      using cl = clon_type;
-
       if constexpr (std::is_same_v<type_t, boolean>)
-        return type() == cl::boolean;
+        return type() == clon_type::boolean;
       if constexpr (std::is_same_v<type_t, list>)
-        return type() == cl::list;
+        return type() == clon_type::list;
       if constexpr (std::is_same_v<type_t, string<char_t>>)
-        return type() == cl::string;
+        return type() == clon_type::string;
       if constexpr (std::is_same_v<type_t, number>)
-        return type() == cl::number;
+        return type() == clon_type::number;
       if constexpr (std::is_same_v<type_t, none>)
-        return type() == cl::none;
+        return type() == clon_type::none;
     }
   };
 
@@ -184,52 +175,54 @@ namespace clon
   }
 
   template <typename char_t>
-  struct nexts_iterator
+  struct childs_iterator
   {
     root_view<char_t> view;
 
-    nexts_iterator &operator++()
+    childs_iterator &operator++()
     {
       view.index = view.next();
       return *this;
     }
 
-    nexts_iterator operator++(int)
+    childs_iterator operator++(int)
     {
-      nexts_iterator tmp(*this);
+      childs_iterator tmp(*this);
       ++(*this);
       return tmp;
     }
 
-    const std::size_t &operator*() { return view.index; }
+    root_view<char_t> operator*() const { return make_rview(view, view.index); }
 
     friend bool operator==(
-        const nexts_iterator &a,
-        const nexts_iterator &b)
+        const childs_iterator &a,
+        const childs_iterator &b)
     {
       return a.view.root == b.view.root and
              a.view.index == b.view.index;
     }
 
     friend bool operator!=(
-        const nexts_iterator &a,
-        const nexts_iterator &b)
+        const childs_iterator &a,
+        const childs_iterator &b)
     {
       return not(a == b);
     }
   };
 
   template <typename char_t>
-  struct nexts
+  struct childs_list
   {
     root_view<char_t> view;
-
-    nexts_iterator<char_t> begin() const { return {view}; }
-    nexts_iterator<char_t> end() const { return {make_rview(view, no_root)}; }
+    childs_iterator<char_t> begin() const { return {view}; }
+    childs_iterator<char_t> end() const { return {make_rview(view, no_next)}; }
   };
 
   template <typename char_t>
-  nexts<char_t> indexes(const root_view<char_t> view) { return {view}; }
+  childs_list<char_t> childs(const root_view<char_t> &view)
+  {
+    return {make_rview(view, view.child())};
+  }
 
   template <typename char_t>
   std::size_t length_of(const root_view<char_t> &view)
@@ -242,18 +235,20 @@ namespace clon
       clon::fmt::formatter_context<char_t> &ctx,
       const root_view<char_t> &view)
   {
+    namespace fmt = clon::fmt;
+
     switch (view.type())
     {
     case clon_type::boolean:
     case clon_type::number:
     case clon_type::string:
-      clon::fmt::format_into(ctx, "({} {})", view.name(), view.valv());
+      fmt::format_into(ctx, "({} {})", view.name(), view.valv());
       break;
     case clon_type::list:
-      clon::fmt::format_into(ctx, "({} ", view.name());
-      for (auto &&index : indexes(make_rview(view, view.child())))
-        format_of(ctx, make_rview(view, index));
-      clon::fmt::format_into(ctx, ")");
+      fmt::format_into(ctx, "({} ", view.name());
+      for (auto &&child : childs(view))
+        format_of(ctx, child);
+      fmt::format_into(ctx, ")");
       break;
     case clon_type::none:
       break;
@@ -755,11 +750,11 @@ namespace clon
     std::size_t cnt = 0;
 
     if (view.type() == clon_type::list)
-      for (const std::size_t &i : indexes(make_rview(view, view.child())))
-        if (make_rview(view, i).name() == pth.name)
+      for (root_view<char_t> &&child : childs(view))
+        if (child.name() == pth.name)
         {
           if (cnt == pth.min)
-            return make_rview(view, i);
+            return child;
           else
             ++cnt;
         }
@@ -777,52 +772,104 @@ namespace clon
 
   template <typename char_t>
   root_view<char_t> get(
-      const paths_iterator<char_t> &b,
-      const paths_iterator<char_t> &e,
+      const std::basic_string_view<char_t> &pths,
       const root_view<char_t> &view)
   {
-    if (view.is_<list>())
+    bool should_return = false;
+
+    root_view<char_t> vfound = view;
+
+    for (const path<char_t> &pth : split_paths(pths))
     {
-      const path<char_t> p = *b;
-      std::size_t cnt(0);
+      bool found = false;
 
-      for (const std::size_t &i : indexes(make_rview(view, view.child())))
+      if (should_return)
+        return make_rview(view, no_root);
+
+      if (vfound.template is_<list>())
       {
-        root_view<char_t> &&vi = make_rview(view, i);
-        
-        if (vi.name() == p.name)
-        {
-          
-        }
+        std::size_t cnt = 0;
+
+        for (root_view<char_t> &&child : childs(vfound))
+          if (child.name() == pth.name)
+          {
+            if (cnt == pth.min)
+            {
+              found = true;
+              vfound = child;
+              break;
+            }
+            else
+              ++cnt;
+          }
       }
+      else
+        should_return = true;
+
+      if (not found)
+        return make_rview(view, no_root);
     }
-  }
 
-  template <typename char_t>
-  root_view<char_t> get(
-      const paths<char_t> &pths,
-      const root_view<char_t> &view)
-  {
-    root_view<char_t> found = view;
-
-    for (const path<char_t> &pth : pths)
-      switch (view.type())
-      {
-      case clon_type::boolean:
-      case clon_type::number:
-      case clon_type::string:
-      case clon_type::list:
-      }
-  }
-
-  template <typename char_t>
-  root_view<char_t> get(
-      const std::basic_string_view<char_t> &pth,
-      const root_view<char_t> &view)
-  {
-    return get(split_paths(pth), view);
+    return vfound;
   }
 
 } // namespace clon
 
+namespace clon
+{
+  template <typename char_t>
+  class basic_api_view;
+
+  template <typename char_t>
+  class basic_api : public basic_api_view<char_t>
+  {
+    root_node<char_t> node;
+
+  public:
+    explicit basic_api(const std::basic_string_view<char_t> &_v)
+        : basic_api_view<char_t>(make_rview(node)), node(parse(_v)) {}
+  };
+
+  template <typename char_t>
+  class basic_api_view
+  {
+    root_view<char_t> view;
+
+  public:
+    explicit basic_api_view(const root_view<char_t> &_v)
+        : view(_v) {}
+
+  public:
+    basic_api_view<char_t> get(const std::basic_string_view<char_t> &pth) const
+    {
+      return basic_api_view<char_t>(clon::get(pth, view));
+    }
+
+    basic_api_view<char_t> operator[](const std::basic_string_view<char_t> &pth) const
+    {
+      return get(pth);
+    }
+
+    const root_view<char_t> &v() const { return view; }
+    clon_type type() const { return view.type(); }
+    const std::basic_string_view<char_t> &name() const { return view.name(); }
+  };
+
+  template <typename char_t>
+  std::size_t length_of(const basic_api_view<char_t> &a)
+  {
+    return length_of(a.v());
+  }
+
+  template <typename char_t>
+  void format_of(
+      clon::fmt::formatter_context<char_t> &ctx,
+      const basic_api_view<char_t> &a)
+  {
+    format_of(ctx, a.v());
+  }
+
+  using api = basic_api<char>;
+  using wapi = basic_api<wchar_t>;
+}
 #endif
