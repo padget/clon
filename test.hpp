@@ -6,13 +6,19 @@
 
 #define test_equals(actual, expected)                                  \
   std::cout << clon::fmt::format("===== at l.{} test {} == {} : {}\n", \
-                                 __LINE__, #actual, #expected,         \
-                                 ((actual) == (expected)) ? "OK" : "KO");
+                                 __LINE__, (#actual), (#expected),     \
+                                (((actual) == (expected)) ? "OK" : "KO"));
 
 #define test_not_equals(actual, expected)                              \
   std::cout << clon::fmt::format("===== at l.{} test {} != {} : {}\n", \
-                                 __LINE__, #actual, #expected,         \
-                                 ((actual) != (expected)) ? "OK" : "KO");
+                                 __LINE__, (#actual), (#expected),     \
+                                 (((actual) != (expected)) ? "OK" : "KO"));
+
+
+#define test_catch(torun, exception)              \
+  try { (torun); std::cout << "no exception KO\n";} \
+  catch (exception& e) {std::cout << "OK\n";}     \
+  catch (...) {std::cout << "bad exception KO\n";}
 
 #define run_test(testname)                                        \
   std::cout << clon::fmt::format("--------------------------\n"); \

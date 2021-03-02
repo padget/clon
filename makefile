@@ -23,7 +23,7 @@
 # VARIABLES
 ###########################################
 
-CC          := g++-10
+CC          := g++-10 
 LIBS        := 
 FLAGS       := -std=c++20 -Wall -pedantic -Werror -O3 -fconcepts-diagnostics-depth=4
 VERSION     := $(shell more clon.hpp | grep CLON_VERSION | grep -Po '[0-9]+\.[0-9]+\.[0-9]+')
@@ -104,18 +104,24 @@ clean: clean-temporaries clean-doc clean-dist
 # 		TEST TARGETS
 ###########################################
 format.test.out: ##@test build format.test.out that package all unit-tests for format.
-format.test.out: format.test.cpp format.hpp
+format.test.out: format.test.cpp format.hpp test.hpp
 	${CC} -o $@ $< ${LIBS} ${FLAGS}
-	./$@
+
+.PHONY: format.test
+format.test: format.test.out
+	./$^
 
 clon.test.out: ##@test build clon.test.o that package all unit-tests for clon.
-clon.test.out: clon.test.cpp clon.hpp
+clon.test.out: clon.test.cpp clon.hpp test.hpp
 	${CC} -o $@ $< ${LIBS} ${FLAGS}
-	./$@
+
+.PHONY: clon.test
+clon.test: clon.test.out 
+	./$^
 
 .PHONY: test
 test: ##@test run all unit-tests.
-test: format.test.out clon.test.out
+test: format.test clon.test
 
 ###########################################
 # 		DIST TARGETS

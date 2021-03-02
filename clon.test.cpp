@@ -2,28 +2,46 @@
 #include "clon.hpp"
 #include "test.hpp"
 
-constexpr std::string_view cl2 = R"(
-(root 
-  (log 
-    (level 
-      (message "bonne nuit les petits"))
-    (level 10)
-    (level 11)) 
-  (log 
-    (level 13))
-  (log 
-    (level 14))))";
+constexpr std::string_view str = R"(
+(bdd 
+  (person 
+    (name "Morreti")
+    (firstname "Paul")
+    (firstname "Jonhson")
+    (firstname "Henry")
+    (age 35)
+    (male true)
+    (female false)
+    (adress
+      (street "Shepard Harry Street")
+      (postal 82910)
+      (city "Manchester")))
+   (person 
+    (name "Londubass")
+    (firstname "Gordon")
+    (firstname "Morizion")
+    (age 86)
+    (male true)
+    (female false)
+    (adress
+      (street "Blueprint Street")
+      (postal 56468)
+      (city "London")))))";
 
-void first_try()
+constexpr std::string_view stre = R"()";
+
+void should_parse()
 {
-  using namespace clon::fmt;
-  using namespace clon;
+  clon::api a(str);
 
-  api a(cl2);
-  std::cout << fmt::format("{}", a);
+  test_equals(a.name(), "bdd");
+  test_equals(a.total_length(), 24);
 }
 
-#include <typeinfo>
+void should_catch_exception()
+{
+  test_catch(clon::api(stre), std::runtime_error);
+}
 
 int main(int argc, char **argv)
 {
@@ -31,7 +49,8 @@ int main(int argc, char **argv)
   using namespace clon::fmt;
   using namespace clon;
 
-  first_try();
+  run_test(should_parse);
+  run_test(should_catch_exception);
 
   return EXIT_SUCCESS;
 }

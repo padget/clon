@@ -164,7 +164,7 @@ namespace clon
       const root_node<char_t> &r,
       const std::size_t &index = 0)
   {
-    return {&r, index < r.nodes.size() ? index : no_root};
+    return {&r, index};
   }
 
   template <typename char_t>
@@ -819,19 +819,6 @@ namespace clon
 namespace clon
 {
   template <typename char_t>
-  class basic_api_view;
-
-  template <typename char_t>
-  class basic_api : public basic_api_view<char_t>
-  {
-    root_node<char_t> node;
-
-  public:
-    explicit basic_api(const std::basic_string_view<char_t> &_v)
-        : basic_api_view<char_t>(make_rview(node)), node(parse(_v)) {}
-  };
-
-  template <typename char_t>
   class basic_api_view
   {
     root_view<char_t> view;
@@ -851,9 +838,20 @@ namespace clon
       return get(pth);
     }
 
+    std::size_t total_length() const { return view.root->nodes.size(); }
     const root_view<char_t> &v() const { return view; }
     clon_type type() const { return view.type(); }
     const std::basic_string_view<char_t> &name() const { return view.name(); }
+  };
+
+  template <typename char_t>
+  class basic_api : public basic_api_view<char_t>
+  {
+    root_node<char_t> node;
+
+  public:
+    explicit basic_api(const std::basic_string_view<char_t> &_v)
+        : basic_api_view<char_t>(make_rview(node)), node(parse(_v)) {}
   };
 
   template <typename char_t>
