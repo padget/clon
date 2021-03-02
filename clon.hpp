@@ -12,7 +12,7 @@
 
 #include "format.hpp"
 
-namespace clon
+namespace clon::detail
 {
   enum struct clon_type : unsigned
   {
@@ -20,10 +20,22 @@ namespace clon
     boolean = 1,
     number = 2,
     string = 3,
-    list = 4
+    list = 4,
+    no_boolean = 5,
+    no_number = 6,
+    no_string = 7
   };
 
   struct list_tag
+  {
+  };
+  struct no_number_tag
+  {
+  };
+  struct no_boolean_tag
+  {
+  };
+  struct no_string_tag
   {
   };
 
@@ -33,9 +45,14 @@ namespace clon
   using number = double;
   using boolean = bool;
   using list = list_tag;
+  using no_number = no_number_tag;
+  using no_string = no_string_tag;
+  using no_boolean = no_boolean_tag;
 
   template <typename char_t>
-  using value = std::variant<none, boolean, number, string<char_t>, list>;
+  using value = std::variant<
+      none, boolean, number, string<char_t>, list,
+      no_boolean, no_number, no_string>;
 
   template <std::integral t>
   constexpr t maxof = std::numeric_limits<t>::max();
@@ -70,7 +87,7 @@ namespace clon
   struct node
   {
     std::basic_string_view<char_t> name;
-    value<char_t> val;
+    mutable value<char_t> val;
     std::basic_string_view<char_t> valv;
     std::size_t next = no_next;
     std::size_t child = no_child;
@@ -87,16 +104,27 @@ namespace clon
     n.name = name;
     n.valv = valv;
 
-    if (type == clon_type::boolean)
-      n.val = valv == "true";
-    else if (type == clon_type::number)
-      n.val = to_number(valv);
-    else if (type == clon_type::string)
-      n.val = valv;
-    else if (type == clon_type::list)
-      n.val = list();
-    else if (type == clon_type::none)
-      n.val = std::monostate();
+    switch (type)
+    {
+    case clon_type::boolean:
+    case clon_type::no_boolean:
+      n.val = no_boolean{};
+      break;
+    case clon_type::number:
+    case clon_type::no_number:
+      n.val = no_number{};
+      break;
+    case clon_type::string:
+    case clon_type::no_string:
+      n.val = no_string{};
+      break;
+    case clon_type::list:
+      n.val = list{};
+      break;
+    case clon_type::none:
+      n.val = none{};
+      break;
+    }
 
     return n;
   }
@@ -140,20 +168,32 @@ namespace clon
     template <typename type_t>
     const type_t &as_() const
     {
+      if constexpr (std::is_same_v<type_t, boolean>)
+        if (type() == clon_type::no_boolean)
+          root->nodes[index].val = root->nodes[index].valv == "true";
+
+      if constexpr (std::is_same_v<type_t, string<char_t>>)
+        if (type() == clon_type::no_string)
+          root->nodes[index].val = root->nodes[index].valv;
+
+      if constexpr (std::is_same_v<type_t, number>)
+        if (type() == clon_type::no_number)
+          root->nodes[index].val = to_number(root->nodes[index].valv);
+
       return std::get<type_t>(root->nodes[index].val);
     }
 
     template <typename type_t>
-    const bool is_() const
+    bool is_() const
     {
-      if constexpr (std::is_same_v<type_t, boolean>)
-        return type() == clon_type::boolean;
+      if constexpr (std::is_same_v<type_t, boolean> or std::is_same_v<type_t, no_boolean>)
+        return type() == clon_type::boolean or type() == clon_type::no_boolean;
       if constexpr (std::is_same_v<type_t, list>)
         return type() == clon_type::list;
-      if constexpr (std::is_same_v<type_t, string<char_t>>)
-        return type() == clon_type::string;
-      if constexpr (std::is_same_v<type_t, number>)
-        return type() == clon_type::number;
+      if constexpr (std::is_same_v<type_t, string<char_t>> or std::is_same_v<type_t, no_string>)
+        return type() == clon_type::string or type() == clon_type::no_string;
+      if constexpr (std::is_same_v<type_t, number> or std::is_same_v<type_t, no_number>)
+        return type() == clon_type::number or type() == clon_type::no_number;
       if constexpr (std::is_same_v<type_t, none>)
         return type() == clon_type::none;
     }
@@ -240,10 +280,13 @@ namespace clon
 
     switch (view.type())
     {
+    case clon_type::no_boolean:
+    case clon_type::no_number:
     case clon_type::boolean:
     case clon_type::number:
       fmt::format_into(ctx, "({} {})", view.name(), view.valv());
       break;
+    case clon_type::no_string:
     case clon_type::string:
       fmt::format_into(ctx, "({} \"{}\")", view.name(), view.valv());
       break;
@@ -553,7 +596,7 @@ namespace clon
     case clon_type::list:
       scanr = scan_list(ctx.scan);
       break;
-    case clon_type::none:
+    default:
       break;
     }
 
@@ -825,67 +868,124 @@ namespace clon
 
     return vfound;
   }
-
-} // namespace clon
+}
 
 namespace clon
 {
+  using clon_type = detail::clon_type;
+  using number = detail::number;
+  template <typename char_t>
+  using string = detail::string<char_t>;
+  using list = detail::list;
+  using boolean = detail::boolean;
+
   template <typename char_t>
   class basic_api_view
   {
-    root_view<char_t> view;
+    detail::root_view<char_t> view;
 
   public:
-    explicit basic_api_view(const root_view<char_t> &_v)
+    explicit basic_api_view(
+        const detail::root_view<char_t> &_v)
         : view(_v) {}
 
   public:
-    basic_api_view<char_t> get(const std::basic_string_view<char_t> &pth) const
+    basic_api_view<char_t> operator[](
+        const std::basic_string_view<char_t> &pth) const
     {
-      return basic_api_view<char_t>(clon::get(pth, view));
+      return basic_api_view<char_t>(clon::detail::get(pth, view));
     }
 
-    basic_api_view<char_t> operator[](const std::basic_string_view<char_t> &pth) const
+    std::size_t total_length() const
     {
-      return get(pth);
+      return view.root->nodes.size();
     }
 
-    std::size_t total_length() const { return view.root->nodes.size(); }
-    const root_view<char_t> &v() const { return view; }
-    clon_type type() const { return view.type(); }
-    const std::basic_string_view<char_t> &name() const { return view.name(); }
+    clon_type type() const
+    {
+      switch (view.type())
+      {
+      case clon_type::boolean:
+      case clon_type::no_boolean:
+        return clon_type::boolean;
+      case clon_type::number:
+      case clon_type::no_number:
+        return clon_type::number;
+      case clon_type::string:
+      case clon_type::no_string:
+        return clon_type::string;
+      case clon_type::list:
+        return clon_type::list;
+      case clon_type::none:
+      default:
+        return clon_type::none;
+      }
+    }
+
+    const std::basic_string_view<char_t> &name() const
+    {
+      return view.name();
+    }
+
     template <typename type_t>
-    const type_t &as_() const { return view.template as_<type_t>(); }
+    const type_t &as_() const
+    {
+      return view.template as_<type_t>();
+    }
+
     template <typename type_t>
-    const type_t &get_(const std::basic_string_view<char_t> &pth) const { return (*this)[pth].template as_<type_t>(); }
-    const clon::string<char_t>& string(const std::basic_string_view<char_t> &pth) { return get_<clon::string<char_t>>(pth); }
-    const clon::number& number(const std::basic_string_view<char_t> &pth) { return get_<clon::number>(pth); }
-    const clon::boolean& boolean(const std::basic_string_view<char_t> &pth) { return get_<clon::boolean>(pth); }
+    const type_t &get_(
+        const std::basic_string_view<char_t> &pth) const
+    {
+      return (*this)[pth].template as_<type_t>();
+    }
+
+    const clon::string<char_t> &string(
+        const std::basic_string_view<char_t> &pth)
+    {
+      return get_<clon::string<char_t>>(pth);
+    }
+
+    const clon::number &number(
+        const std::basic_string_view<char_t> &pth)
+    {
+      return get_<clon::number>(pth);
+    }
+
+    const clon::boolean &boolean(const std::basic_string_view<char_t> &pth)
+    {
+      return get_<clon::boolean>(pth);
+    }
+
+    const std::basic_string<char_t> to_string()
+    {
+      return view.to_string();
+    }
+
+    friend std::size_t length_of(
+        const basic_api_view<char_t> &a)
+    {
+      return detail::length_of(a.view);
+    }
+
+    friend void format_of(
+        clon::fmt::formatter_context<char_t> &ctx,
+        const basic_api_view<char_t> &a)
+    {
+      detail::format_of(ctx, a.view);
+    }
   };
 
   template <typename char_t>
-  class basic_api : public basic_api_view<char_t>
+  class basic_api
+      : public basic_api_view<char_t>
   {
-    root_node<char_t> node;
+    detail::root_node<char_t> node;
 
   public:
     explicit basic_api(const std::basic_string_view<char_t> &_v)
-        : basic_api_view<char_t>(make_rview(node)), node(parse(_v)) {}
+        : basic_api_view<char_t>(detail::make_rview(node)), node(detail::parse(_v)) {}
   };
-
-  template <typename char_t>
-  std::size_t length_of(const basic_api_view<char_t> &a)
-  {
-    return length_of(a.v());
-  }
-
-  template <typename char_t>
-  void format_of(
-      clon::fmt::formatter_context<char_t> &ctx,
-      const basic_api_view<char_t> &a)
-  {
-    format_of(ctx, a.v());
-  }
 
   using api = basic_api<char>;
   using wapi = basic_api<wchar_t>;
