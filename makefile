@@ -23,12 +23,12 @@
 # VARIABLES
 ###########################################
 
-CC          := g++-10
-LIBS        := -lfmt
-FLAGS       := -std=c++20 -Wall -pedantic -Werror -O3
+CC          := g++-10 
+LIBS        := 
+FLAGS       := -std=c++20 -Wall -pedantic -Werror -O3 -fconcepts-diagnostics-depth=4
 VERSION     := $(shell more clon.hpp | grep CLON_VERSION | grep -Po '[0-9]+\.[0-9]+\.[0-9]+')
 DIST_PREFIX := libclon
-DIST				:= $(DIST_PREFIX)-$(VERSION).zip
+DIST		:= $(DIST_PREFIX)-$(VERSION).zip
 
 # $@ contient le target
 # $^ contient les dépendances
@@ -80,7 +80,7 @@ help: ##@options Shows a list of all available make options.
 .PHONY: clean-temporaries
 clean-temporaries: ##@clean clean the temporary generated filess.
 clean-temporaries:
-	rm -f *.o *.test.out *.bench.out
+	rm -f *.o *.out
 
 .PHONY: clean-doc
 clean-doc: ##@clean clean the generated documentation.
@@ -99,63 +99,37 @@ clean: clean-temporaries clean-doc clean-dist
 # 		BUILD TARGETS
 ###########################################
 
-clon.o: ##@build build the clon.o library.
-clon.o: clon.cpp clon.hpp
-	${CC} -o $@  -c $< ${LIBS} ${FLAGS}
-
-model.o: ##@build build the model.o library.
-model.o: model.cpp model.hpp
-	${CC} -o $@  -c $< ${LIBS} ${FLAGS}
-
-parsing.o: ##@build build the parsing.o library.
-parsing.o: parsing.cpp parsing.hpp
-	${CC} -o $@  -c $< ${LIBS} ${FLAGS}
-
-path.o: ##@build build the path.o library.
-path.o: path.cpp path.hpp
-	${CC} -o $@  -c $< ${LIBS} ${FLAGS}
-
-inout.o: ##@build build the intout.o library.
-inout.o: inout.cpp inout.hpp
-	${CC} -o $@  -c $< ${LIBS} ${FLAGS}
-
-utils.o: ##@build build the utils.o library.
-utils.o: utils.cpp utils.hpp
-	${CC} -o $@  -c $< ${LIBS} ${FLAGS}
-
-libclon.o: ##@build build the libclon.o library.
-libclon.o: clon.o model.o parsing.o utils.o path.o inout.o  
-	ld -relocatable $^ -o $@
-
-.PHONY: build
-build: ##@build build the libclon.o library.
-build: libclon.o
 
 ###########################################
 # 		TEST TARGETS
 ###########################################
+format.test.out: ##@test build format.test.out that package all unit-tests for format.
+format.test.out: format.test.cpp format.hpp test.hpp
+	${CC} -o $@ $< ${LIBS} ${FLAGS}
 
+.PHONY: format.test
+format.test: format.test.out
+	./$^
 
-clon.test.o: ##@test build clon.test.o that package all unit-tests.
-clon.test.o: clon.test.cpp
-	${CC} -o $@  -c $< ${LIBS} ${FLAGS}
+clon.test.out: ##@test build clon.test.o that package all unit-tests for clon.
+clon.test.out: clon.test.cpp clon.hpp test.hpp
+	${CC} -o $@ $< ${LIBS} ${FLAGS}
 
-clon.test.out: ##@test build clon.test.out to execute all unit-tests.
-clon.test.out: clon.test.o libclon.o
-	@${CC} -o $@ $^ ${LIBS}
+.PHONY: clon.test
+clon.test: clon.test.out 
+	./$^
 
 .PHONY: test
-test: ##@test test ibclon.o with the all unit tests.
-test: clon.test.out
-	./$<
+test: ##@test run all unit-tests.
+test: format.test clon.test
 
 ###########################################
 # 		DIST TARGETS
 ###########################################
 
 .PHONY: dist
-dist: ##@dist compress/zip libclon.o, README.md and LICENSE into $(DIST).
-dist: libclon.o README.md LICENSE
+dist: ##@dist compress/zip format.hpp clon.hpp utils.hpp README.md LICENSE into $(DIST).
+dist: format.hpp clon.hpp utils.hpp README.md LICENSE
 	zip $(DIST) $^
 
 ###########################################
@@ -188,19 +162,11 @@ all: ##@all execute all targets in the right order : clean > build > test > dist
 
 all: version	
 	@$(MAKE) clean
-	@$(MAKE) build
+	# @$(MAKE) build
 	@$(MAKE) test
 	@$(MAKE) dist 
 	@$(MAKE) bench
 	@$(MAKE) install
 	@$(MAKE) clean-temporaries
 
-
-## FORMAT target. TODO merge with other targets
-format.out: format.test.cpp format.hpp
-	${CC} -o $@  $< ${LIBS} ${FLAGS}
-	./$@
-	@rm -f format.out
-
-format: format.out
 
