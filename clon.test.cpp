@@ -73,7 +73,6 @@ void should_equals_to_false()
 void should_equals_to_Paul()
 {
   clon::api a(str);
-  std::cout << a.to_string() << std::endl;
   test_equals(a["person.firstname"].type(), clon::clon_type::string);
   test_equals(a["person.firstname"].as_<clon::string<char>>(), "Paul");
   test_equals(a.string("person.firstname"), "Paul");
