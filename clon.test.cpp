@@ -76,7 +76,6 @@ void should_equals_to_Paul()
   test_equals(a["person.firstname"].type(), clon::clon_type::string);
   test_equals(a["person.firstname"].as_<clon::string<char>>(), "Paul");
   test_equals(a.string("person.firstname"), "Paul");
-  
 }
 
 int main(int argc, char **argv)
