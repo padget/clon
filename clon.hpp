@@ -242,8 +242,10 @@ namespace clon
     {
     case clon_type::boolean:
     case clon_type::number:
-    case clon_type::string:
       fmt::format_into(ctx, "({} {})", view.name(), view.valv());
+      break;
+    case clon_type::string:
+      fmt::format_into(ctx, "({} \"{}\")", view.name(), view.valv());
       break;
     case clon_type::list:
       fmt::format_into(ctx, "({} ", view.name());
@@ -338,6 +340,11 @@ namespace clon
     {
       return data.substr(index).starts_with(sv);
     }
+
+    void backward()
+    {
+      index = index - 1;
+    }
   };
 
   template <typename char_t, std::size_t n>
@@ -404,6 +411,7 @@ namespace clon
     if (scan.symbol() == symbol_type::dquote)
     {
       scan.advance();
+      scan.ignore();
 
       while (scan.symbol() != symbol_type::dquote)
         scan.advance();
@@ -416,7 +424,11 @@ namespace clon
     else
       handle_error_expecting("'\"'");
 
-    return scan.extract();
+    scan.backward();
+    auto &&str = scan.extract();
+    scan.advance();
+    scan.ignore();
+    return str;
   }
 
   template <typename char_t>
@@ -842,6 +854,13 @@ namespace clon
     const root_view<char_t> &v() const { return view; }
     clon_type type() const { return view.type(); }
     const std::basic_string_view<char_t> &name() const { return view.name(); }
+    template <typename type_t>
+    const type_t &as_() const { return view.template as_<type_t>(); }
+    template <typename type_t>
+    const type_t &get_(const std::basic_string_view<char_t> &pth) const { return (*this)[pth].template as_<type_t>(); }
+    const clon::string<char_t>& string(const std::basic_string_view<char_t> &pth) { return get_<clon::string<char_t>>(pth); }
+    const clon::number& number(const std::basic_string_view<char_t> &pth) { return get_<clon::number>(pth); }
+    const clon::boolean& boolean(const std::basic_string_view<char_t> &pth) { return get_<clon::boolean>(pth); }
   };
 
   template <typename char_t>
