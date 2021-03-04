@@ -73,6 +73,7 @@ HELP_FUNC = \
 help: ##@options Shows a list of all available make options.
 	@perl -e '$(PRINT_META)' $(MAKEFILE_LIST)
 	@perl -e '$(HELP_FUNC)' $(MAKEFILE_LIST)
+
 ###########################################
 # 		CLEAN TARGETS
 ###########################################
@@ -96,13 +97,9 @@ clean: ##@clean clean the all project generated files (temp, doc, dist, .out).
 clean: clean-temporaries clean-doc clean-dist
 
 ###########################################
-# 		BUILD TARGETS
-###########################################
-
-
-###########################################
 # 		TEST TARGETS
 ###########################################
+
 format.test.out: ##@test build format.test.out that package all unit-tests for format.
 format.test.out: format.test.cpp format.hpp test.hpp
 	${CC} -o $@ $< ${LIBS} ${FLAGS}
@@ -160,9 +157,8 @@ version: clon.hpp
 .PHONY: all
 all: ##@all execute all targets in the right order : clean > build > test > dist > bench > install > clean-temporaries.
 
-all: version	
+all: version
 	@$(MAKE) clean
-	# @$(MAKE) build
 	@$(MAKE) test
 	@$(MAKE) dist 
 	@$(MAKE) bench
