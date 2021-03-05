@@ -7,7 +7,6 @@
 
 namespace clon::fmt
 {
-
   template <typename char_t>
   struct formatter_context;
 
@@ -16,8 +15,12 @@ namespace clon::fmt
       std::same_as<char_t, char> or
       std::same_as<char_t, wchar_t>;
 
+  ///////////////////////////////////
+  // std::basic_string_view format //
+  ///////////////////////////////////
   template <typename char_t>
-  std::size_t length_of(const std::basic_string_view<char_t> &v)
+  std::size_t length_of(
+      const std::basic_string_view<char_t> &v)
   {
     return v.size();
   }
@@ -31,14 +34,11 @@ namespace clon::fmt
       ctx.append(c);
   }
 
+  ///////////////////////////
+  // literal string format //
+  ///////////////////////////
   template <std::size_t n>
   std::size_t length_of(const char (&s)[n])
-  {
-    return n - 1;
-  }
-
-  template <std::size_t n>
-  std::size_t length_of(const wchar_t (&s)[n])
   {
     return n - 1;
   }
@@ -52,6 +52,12 @@ namespace clon::fmt
   }
 
   template <std::size_t n>
+  std::size_t length_of(const wchar_t (&s)[n])
+  {
+    return n - 1;
+  }
+
+  template <std::size_t n>
   void format_of(
       formatter_context<wchar_t> &ctx,
       const wchar_t (&s)[n])
@@ -59,6 +65,9 @@ namespace clon::fmt
     format_of(ctx, std::basic_string_view<wchar_t>(s));
   }
 
+  ///////////////////////////
+  // integral types format //
+  ///////////////////////////
   template <std::integral integral_t>
   std::size_t length_of(const integral_t &i)
   {
@@ -101,6 +110,9 @@ namespace clon::fmt
     }
   }
 
+  //////////////////////////
+  // strings types format //
+  //////////////////////////
   template <typename char_t>
   std::size_t length_of(const std::basic_string<char_t> &s)
   {
@@ -115,6 +127,10 @@ namespace clon::fmt
     format_of(ctx, std::basic_string_view<char_t>(v.begin(), v.end()));
   }
 
+
+  //////////////////////////////////
+  // vector of chars types format //
+  //////////////////////////////////
   template <charable char_t>
   std::size_t length_of(const std::vector<char_t> &v)
   {

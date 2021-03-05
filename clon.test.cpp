@@ -32,7 +32,7 @@ constexpr std::string_view stre = R"()";
 
 void should_parse()
 {
-  clon::api a(str);
+  clon::clon a(str);
 
   test_equals(a.name(), "bdd");
   test_equals(a.total_length(), 24);
@@ -40,12 +40,12 @@ void should_parse()
 
 void should_catch_exception()
 {
-  test_catch(clon::api(stre), std::runtime_error);
+  test_catch(clon::clon(stre), std::runtime_error);
 }
 
 void should_equals_to_82910()
 {
-  clon::api a(str);
+  clon::clon a(str);
   test_equals(a["person.address.postal"].type(), clon::clon_type::number);
   test_equals(a["person.address.postal"].as_<clon::number>(), 82910);
   test_equals(a.number("person.address.postal"), 82910);
@@ -53,7 +53,7 @@ void should_equals_to_82910()
 
 void should_equals_to_true()
 {
-  clon::api a(str);
+  clon::clon a(str);
   test_equals(a["person.male"].type(), clon::clon_type::boolean);
   test_equals(a["person.male"].as_<clon::boolean>(), true);
   test_equals(a["person:1.male"].type(), clon::clon_type::boolean);
@@ -62,7 +62,7 @@ void should_equals_to_true()
 
 void should_equals_to_false()
 {
-  clon::api a(str);
+  clon::clon a(str);
   test_equals(a["person.female"].type(), clon::clon_type::boolean);
   test_equals(a["person.female"].as_<clon::boolean>(), false);
   test_equals(a["person:1.female"].type(), clon::clon_type::boolean);
@@ -72,7 +72,7 @@ void should_equals_to_false()
 
 void should_equals_to_Paul()
 {
-  clon::api a(str);
+  clon::clon a(str);
   test_equals(a["person.firstname"].type(), clon::clon_type::string);
   test_equals(a["person.firstname"].as_<clon::string<char>>(), "Paul");
   test_equals(a.string("person.firstname"), "Paul");

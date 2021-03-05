@@ -880,20 +880,20 @@ namespace clon
   using boolean = detail::boolean;
 
   template <typename char_t>
-  class basic_api_view
+  class basic_clon_view
   {
     detail::root_view<char_t> view;
 
   public:
-    explicit basic_api_view(
+    explicit basic_clon_view(
         const detail::root_view<char_t> &_v)
         : view(_v) {}
 
   public:
-    basic_api_view<char_t> operator[](
+    basic_clon_view<char_t> operator[](
         const std::basic_string_view<char_t> &pth) const
     {
-      return basic_api_view<char_t>(clon::detail::get(pth, view));
+      return basic_clon_view<char_t>(clon::detail::get(pth, view));
     }
 
     std::size_t total_length() const
@@ -963,31 +963,31 @@ namespace clon
     }
 
     friend std::size_t length_of(
-        const basic_api_view<char_t> &a)
+        const basic_clon_view<char_t> &a)
     {
       return detail::length_of(a.view);
     }
 
     friend void format_of(
         clon::fmt::formatter_context<char_t> &ctx,
-        const basic_api_view<char_t> &a)
+        const basic_clon_view<char_t> &a)
     {
       detail::format_of(ctx, a.view);
     }
   };
 
   template <typename char_t>
-  class basic_api
-      : public basic_api_view<char_t>
+  class basic_clon
+      : public basic_clon_view<char_t>
   {
     detail::root_node<char_t> node;
 
   public:
-    explicit basic_api(const std::basic_string_view<char_t> &_v)
-        : basic_api_view<char_t>(detail::make_rview(node)), node(detail::parse(_v)) {}
+    explicit basic_clon(const std::basic_string_view<char_t> &_v)
+        : basic_clon_view<char_t>(detail::make_rview(node)), node(detail::parse(_v)) {}
   };
 
-  using api = basic_api<char>;
-  using wapi = basic_api<wchar_t>;
+  using clon = basic_clon<char>;
+  using wclon = basic_clon<wchar_t>;
 }
 #endif
