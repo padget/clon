@@ -78,11 +78,23 @@ void should_equals_to_Paul()
   test_equals(a.string("person.firstname"), "Paul");
 }
 
+void should_update_to_Paulo()
+{
+  clon::clon a(str);
+  test_equals(a["person.firstname"].type(), clon::clon_type::string);
+  test_equals(a["person.firstname"].as_<clon::string<char>>(), "Paul");
+  test_equals(a.string("person.firstname"), "Paul");
+  a["person.firstname"].update<clon::string<char>>("Paulo");
+  test_equals(a["person.firstname"].type(), clon::clon_type::string);
+  test_equals(a["person.firstname"].as_<clon::string<char>>(), "Paulo");
+  test_equals(a.string("person.firstname"), "Paulo");
+}
+
 int main(int argc, char **argv)
 {
-
-  using namespace clon::fmt;
-  using namespace clon;
+  clon::clon a(str);
+  a["person.firstname"].update<clon::string<char>>("lol");
+  std::cout << clon::fmt::format("{}", a);
 
   run_test(should_parse);
   run_test(should_catch_exception);
@@ -90,6 +102,7 @@ int main(int argc, char **argv)
   run_test(should_equals_to_true);
   run_test(should_equals_to_false);
   run_test(should_equals_to_Paul);
+  run_test(should_update_to_Paulo);
 
   return EXIT_SUCCESS;
 }

@@ -29,12 +29,15 @@ namespace clon::detail
   struct list_tag
   {
   };
+
   struct no_number_tag
   {
   };
+
   struct no_boolean_tag
   {
   };
+
   struct no_string_tag
   {
   };
@@ -42,7 +45,7 @@ namespace clon::detail
   template <typename char_t>
   using string = std::basic_string_view<char_t>;
   using none = std::monostate;
-  using number = double;
+  using number = std::int64_t;
   using boolean = bool;
   using list = list_tag;
   using no_number = no_number_tag;
@@ -134,6 +137,7 @@ namespace clon::detail
   {
     std::vector<char_t> buff;
     std::vector<node<char_t>> nodes;
+    std::vector<std::basic_string<char_t>> updt;
   };
 
   template <typename char_t>
@@ -149,7 +153,7 @@ namespace clon::detail
   template <typename char_t>
   struct root_view
   {
-    const root_node<char_t> *root;
+    root_node<char_t> *root;
     std::size_t index;
 
     std::basic_string<char_t> to_string() const
@@ -201,7 +205,7 @@ namespace clon::detail
 
   template <typename char_t>
   root_view<char_t> make_rview(
-      const root_node<char_t> &r,
+      root_node<char_t> &r,
       const std::size_t &index = 0)
   {
     return {&r, index};
@@ -273,7 +277,7 @@ namespace clon::detail
 
   template <typename char_t>
   void format_of(
-      clon::fmt::formatter_context<char_t> &ctx,
+      fmt::formatter_context<char_t> &ctx,
       const root_view<char_t> &view)
   {
     namespace fmt = clon::fmt;
@@ -893,7 +897,7 @@ namespace clon
     basic_clon_view<char_t> operator[](
         const std::basic_string_view<char_t> &pth) const
     {
-      return basic_clon_view<char_t>(clon::detail::get(pth, view));
+      return basic_clon_view<char_t>(detail::get(pth, view));
     }
 
     std::size_t total_length() const
@@ -962,6 +966,31 @@ namespace clon
       return view.to_string();
     }
 
+    template <typename type_t>
+    void update(const std::basic_string_view<char_t> &valv)
+    {
+      if (view.index != detail::no_root)
+      {
+        view.root->updt.push_back(
+            std::basic_string<char_t>(valv.begin(), valv.end()));
+
+        detail::node<char> &node = view.root->nodes[view.index];
+
+        node.valv = std::basic_string_view<char_t>(
+            view.root->updt.back().begin(),
+            view.root->updt.back().end());
+
+        if constexpr (std::is_same_v<type_t, detail::boolean>)
+          node.val = detail::no_boolean{};
+
+        if constexpr (std::is_same_v<type_t, detail::string<char_t>>)
+          node.val = detail::no_string{};
+
+        if constexpr (std::is_same_v<type_t, detail::number>)
+          node.val = detail::no_number{};
+      }
+    }
+
     friend std::size_t length_of(
         const basic_clon_view<char_t> &a)
     {
@@ -990,4 +1019,5 @@ namespace clon
   using clon = basic_clon<char>;
   using wclon = basic_clon<wchar_t>;
 }
+
 #endif
