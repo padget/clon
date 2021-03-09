@@ -966,6 +966,11 @@ namespace clon
       return view.to_string();
     }
 
+    const std::basic_string_view<char_t>& value()
+    {
+      return view.valv();
+    }
+
     template <typename type_t>
     void update(const std::basic_string_view<char_t> &valv)
     {
